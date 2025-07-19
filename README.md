@@ -5,7 +5,7 @@
 <h5 align="center"> Data Analyst | Business | Economics | Python | R | SAS| TABLEAU | Machine Learning </h5>
 
 
-- 👨‍💻 All of my projects are available at [www.linkedin.com/in/ rupesh-bawane-a61501287](www.linkedin.com/in/ rupesh-bawane-a61501287)
+- 👨‍💻 Data Analyst @ IDFC FIRST Bank, Mumbai                                             (uul'21 - Sep'24)
 
 - 💬 Ask me about **Data, Business, Economics, Python, R, SAS, SQL and Tableau**
 
