@@ -2,7 +2,7 @@
 
 <h1 align="center">Hi 👋, I'm Rupesh Bawane</h1>
 <h3 align="center">A passionate Data Analyst from India.</h3>
-<h3 align="center"> Data Analyst | Business | Economics | Python | R | SAS| TABLEAU | Machine Learning </h3>
+<h5 align="center"> Data Analyst | Business | Economics | Python | R | SAS| TABLEAU | Machine Learning </h5>
 
 - 📚 I’m currently studying **MSc Data Analytics at Ca'Foscari University of Venice**
 
