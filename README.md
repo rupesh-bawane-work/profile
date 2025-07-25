@@ -7,7 +7,7 @@
 
 - 👨‍💻 Data Analyst @ IDFC FIRST Bank, Mumbai                                             (Jul'21 - Sep'24)
 
-- 💬 Ask me about **Data, Business, Economics, Python, R, SAS, SQL and Tableau**
+- 💬 Ask me about **Data, Business, Economics, Python, R, SAS, SQL and Tableau**, PowerBI
 
 - For my on job projects list please check CV and you can find some sample codes in repository (sample_codes)
 
