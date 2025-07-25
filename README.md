@@ -13,7 +13,7 @@
 
 - ⛱️ In my free hours I develop some fun websites, which you can check in main repository and I love cycling
 
-- 📫 How to reach me **rupesh.bawane.work@gmail.com**
+- 📫 How to reach me: **rupesh.bawane.work@gmail.com**
 
 <h3 align="left">Connect with me:</h3>
 <p align="left">
