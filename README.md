@@ -5,9 +5,11 @@
 <h5 align="center"> Data Analyst | Business | Economics | Python | R | SAS| TABLEAU | Machine Learning </h5>
 
 
-- 👨‍💻 Data Analyst @ IDFC FIRST Bank, Mumbai                                             (uul'21 - Sep'24)
+- 👨‍💻 Data Analyst @ IDFC FIRST Bank, Mumbai                                             (Jul'21 - Sep'24)
 
 - 💬 Ask me about **Data, Business, Economics, Python, R, SAS, SQL and Tableau**
+
+- For my on job project lists please check CV and you can find some sample codes in repository (sample_codes)
 
 - 📫 How to reach me **rupesh.bawane.work@gmail.com**
 
