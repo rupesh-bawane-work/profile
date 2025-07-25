@@ -9,7 +9,7 @@
 
 - 💬 Ask me about **Data, Business, Economics, Python, R, SAS, SQL and Tableau**
 
-- For my on job project lists please check CV and you can find some sample codes in repository (sample_codes)
+- For my on job projects list please check CV and you can find some sample codes in repository (sample_codes)
 
 - 📫 How to reach me **rupesh.bawane.work@gmail.com**
 
