@@ -7,9 +7,11 @@
 
 - 👨‍💻 Data Analyst @ IDFC FIRST Bank, Mumbai                                             (Jul'21 - Sep'24)
 
-- 💬 Ask me about **Data, Business, Economics, Python, R, SAS, SQL and Tableau**, PowerBI
+- 💬 Ask me about **Data, Business, Economics, Python, R, SAS, SQL, Tableau and PowerBI**
 
-- For my on job projects list please check CV and you can find some sample codes in repository (sample_codes)
+- 📝 For my on job projects list please check CV and you can find some sample codes in repository (sample_codes)
+
+- ⛱️ In my free hours I develop some fun websites, which you can check in main repository and I love cycling
 
 - 📫 How to reach me **rupesh.bawane.work@gmail.com**
 
