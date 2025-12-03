@@ -364,6 +364,10 @@ section {
     text-decoration: underline; /* optional: underline on hover */
 }
 
+html {
+    scroll-behavior: smooth;
+}
+
 
 
 
