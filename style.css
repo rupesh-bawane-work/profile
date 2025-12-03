@@ -75,8 +75,8 @@ nav ul li a:hover {
 }
 
 .hero .profile-photo {
-    width: 200px;
-    height: 200px;
+    width: 30vw;
+    height: 30vw;
     border-radius: 50%;
     object-fit: cover;
     border: 4px solid #00aaff;
@@ -363,4 +363,5 @@ section {
     color: #00aaff;          /* change color on hover */
     text-decoration: underline; /* optional: underline on hover */
 }
+
 
