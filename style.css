@@ -368,6 +368,16 @@ html {
     scroll-behavior: smooth;
 }
 
+ul {
+    list-style-type: disc; /* default bullet style */
+    margin-left: 20px;     /* indent bullets */
+    color: #333;           /* text color */
+}
+
+ul li {
+    margin-bottom: 5px;    /* spacing between items */
+}
+
 
 
 
