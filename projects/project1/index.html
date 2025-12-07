@@ -1,1 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project: Sales Dashboard</title>
 
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+<!-- PrismJS for syntax highlighting -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+
+<!-- Custom CSS -->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+    <h1>Call Center Propensity Model (Random Forest)</h1>
+</header>
+
+<main>
+    <!-- Business Problem -->
+    <h2>Business Problem</h2>
+    <p>Call center agents have limited time and large customer lists. Usually, they used to call customers using intuition-based rules, leading to inefficient call attempts and low conversion rates. The key business challenge was to improve conversion rate for repeat loan customers.</p>
+
+    <!-- Project Overview -->
+    <h2>Project Overview</h2>
+    <p>Develop a machine learning model to predict the probability that a Micro Enterprise Loan (MEL) customer will take a repeat loan.</p>
+    
+    <!-- Project Architecture -->
+    <h2> Project Architecture</h2>
+    <li> Data Extraction (SQL)</li>
+    <li> Variable creation</li>
+    <li> EDA</li>
+    <li> Model training (Python)</li>
+    <li> Model evaluation</li>
+    <li> Propensity scoring</li>
+    <li> Deployment</li>
+  
+    <!-- Data Requirement-->
+    <h2> Data Requirement</h2>
+    <li> Loan Application</li>
+    <li> Loan Disbursement</li>
+    <li> Loan Performance</li>
+    <li> Credit Bureau Data</li>
+    <li> Personal Information Data</li>
+    <li> Call Center Data</li>
+    
+    <!-- Data Extraction-->
+    <h2> Data Exrtraction & Variable creation</h2>
+    <p>Call Attempt between Aug23-Oct23</p>
+    <div class="code-holder">
+        <span class="code-label">SQL</span>
+<pre><code class="language-sql">CREATE TABLE call_table AS
+SELECT loan_id, parent_loan_id, customer_id, MAX(disbursement_flag) AS target
+FROM s3.call_table
+WHERE product = 'MEL' 
+  AND call_date BETWEEN DATE '2023-08-01' AND DATE '2023-10-31'
+GROUP BY customer_id, loan_id, parent_loan_id;</code></pre>
+    </div>
+  
+    <p>MEL parent loan details</p>
+    <div class="code-holder">
+        <span class="code-label">SQL</span>
+<pre><code class="language-sql">CREATE TABLE mel_loan_cases AS
+SELECT loan_id, customer_id, disburment_date, disbursed_amount, closing_date, product, tenure
+FROM s3.loan_disbursement
+WHERE loan_id IN (SELECT DISTINCT parent_loan_id FROM call_table)
+  AND EXTRACT(MONTH FROM AGE(closing_date, disburment_date)) > 12;</code></pre>
+    </div>
+ 
+    <p>Personal details</p>
+    <div class="code-holder">
+        <span class="code-label">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.customer_dump AS
+SELECT 
+    customer_id, date_of_birth, age, state, gender, education, income, 
+    marital_status, occupation, language, family_member_count, own_home, 
+    house_area, farming_land, farming_area, number_of_vehicles, car_flag, 
+    number_of_smartphones,
+    COUNT(b.loan_id) AS count_disbursed_loans, 
+    MAX(disbursed_amount) AS max_disbursed_amount,
+    MIN(disbursed_amount) AS min_disbursed_amount, 
+    AVG(disbursed_amount) AS avg_disbursed_amount,
+    SUM(CASE WHEN secured_loan_flag = 1 THEN 1 ELSE 0 END) AS secured_loan_count,
+    SUM(CASE WHEN secured_loan_flag = 0 THEN 1 ELSE 0 END) AS unsecured_loan_count
+FROM s3.personal_details
+LEFT JOIN s3.loan_disbursement b
+    ON personal_details.customer_id = b.customer_id
+WHERE personal_details.customer_id IN (SELECT DISTINCT customer_id FROM mel_loan_cases)
+GROUP BY customer_id;
+
+-- Adding target variable to customer dump
+CREATE TABLE my_lib.customer_dump AS
+SELECT a.*, b.*
+FROM my_lib.customer_dump a
+LEFT JOIN call_table b
+ON a.customer_id = b.customer_id;</code></pre>
+    </div>
+
+    <p>MEL Loan performance</p>
+    <div class="code-holder">
+        <span class="code-label">SQL</span>
+<pre><code class="language-sql">CREATE TABLE mel_loan_performance AS
+SELECT loan_id, customer_id, dpd_string, closing_date
+FROM s3.loan_performance
+WHERE closing_date IS NOT NULL 
+  AND loan_id IN (SELECT DISTINCT loan_id FROM my_lib.loan_cases);</code></pre>
+    </div>
+
+    <p>MEL Performance variable creation</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">def split_dpd(dpd):
+    dpd = str(dpd)
+    max1 = int(max(dpd[-3:])) if len(dpd) >= 3 else int(max(dpd))
+    max3 = int(max(dpd[-9:])) if len(dpd) >= 9 else int(max(dpd))
+    max6 = int(max(dpd[-18:])) if len(dpd) >= 18 else int(max(dpd))
+    max9 = int(max(dpd[-27:])) if len(dpd) >= 27 else int(max(dpd))
+    max12 = int(max(dpd[-36:])) if len(dpd) >= 36 else int(max(dpd))
+    return pd.Series([max1, max3, max6, max9, max12])
+
+mel_loan_performance[['max_dpp_last1month','max_dpp_last3month','max_dpp_last6month','max_dpp_last9month','max_dpp_last12month']] = \
+    mel_loan_performance['dpd_string'].apply(split_dpd)
+
+my_lib.customer_dump = pd.merge(my_lib.customer_dump, mel_loan_performance, on='customer_id', how='left')</code></pre>
+    </div>
+  
+    <p>Customer's ALL loans with our bank</p>
+    <div class="code-holder">
+        <span class="code-label">SQL</span>
+<pre><code class="language-sql">CREATE TABLE all_loan_cases AS
+SELECT loan_id, customer_id, disburment_date, disbursed_amount, closing_date, product, tenure
+FROM s3.loan_disbursement
+WHERE customer_id IN (SELECT customer_id FROM my_lib.customer_dump);
+
+CREATE TABLE my_lib.all_loan_cases AS
+SELECT a.*, b.application_id, b.application_date, b.branch_id, b.bureau_token, b.secured_loan_flag
+FROM all_loan_cases a
+LEFT JOIN s3.loan_application b
+ON a.loan_id = b.loan_id;</code></pre>
+    </div>
+
+    <p>All loan performance details</p>
+    <div class="code-holder">
+        <span class="code-label">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.loan_performance AS
+SELECT a.loan_id, a.customer_id, a.dpd_string, a.closing_date
+FROM s3.loan_performance a
+INNER JOIN my_lib.all_loan_cases b
+ON a.loan_id = b.loan_id;</code></pre>
+    </div>
+
+    <p>Credit Bureau data extraction</p>
+    <div class="code-holder">
+        <span class="code-label">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.bureau_data AS
+SELECT 
+    bureau_token, branch, disbursement_date, closing_date, product, 
+    dpd_string, institution, customer_id
+FROM s3.bureau_dump
+WHERE bureau_token IN (SELECT bureau_token FROM my_lib.loan_cases)
+  AND institution != 'OUR BANK';</code></pre>
+    </div>
+
+    <p>Credit Bureau variable creation</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">def max_dpd(dpd, product, target_product):
+    dpd = str(dpd)
+    if product != target_product:
+        return pd.Series([None] * 5)
+
+    periods = [3, 9, 18, 27, 36]
+    max_vals = [
+        int(max(dpd[-p:])) if len(dpd) >= p else int(max(dpd))
+        for p in periods
+    ]
+    return pd.Series(max_vals)
+
+products = my_lib.bureau_data['product'].unique()
+
+for prod in products:
+    cols = [f"{prod}_max_dpd_last1month",
+            f"{prod}_max_dpd_last3month",
+            f"{prod}_max_dpd_last6month",
+            f"{prod}_max_dpd_last9month",
+            f"{prod}_max_dpd_last12month"]
+    
+    my_lib.bureau_data[cols] = my_lib.bureau_data.apply(
+        lambda x: max_dpd(x['dpd_string'], x['product'], prod), axis=1
+    )
+
+dpd_cols = [c for c in my_lib.bureau_data.columns if 'max_dpd' in c]
+offus_bureau_dpd = my_lib.bureau_data.groupby('customer_id')[dpd_cols].max().reset_index()
+
+my_lib.customer_dump = pd.merge(my_lib.customer_dump, offus_bureau_dpd, on='customer_id', how='left')</code></pre>
+    </div>
+
+    <!-- EDA Section -->
+    <h2> Exploratory Data Analysis</h2>
+
+    <p>Importing libraries</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.set(style="whitegrid", palette="Set2")</code></pre>
+    </div>
+
+    <p>Basic Data Structure</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">df = my_lib.customer_dump
+  
+print("Shape:", df.shape)
+display(df.head())
+df.info()
+df.describe(include='all').T</code></pre>
+    </div>
+
+    <p>Missing Value Analysis</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">missing = df.isnull().sum().sort_values(ascending=False)
+missing_pct = (df.isnull().mean() * 100).sort_values(ascending=False)
+missing_df = pd.concat([missing, missing_pct], axis=1, keys=['Missing', '% Missing'])
+display(missing_df)
+
+plt.figure(figsize=(12,6))
+sns.heatmap(df.isnull(), cbar=False)
+plt.title("Missing Value Heatmap")
+plt.show()</code></pre>
+    </div>
+
+    <p>Numerical Feature Analysis</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">numeric_cols = df.select_dtypes(include=[np.number]).columns
+df[numeric_cols].hist(figsize=(16, 12), bins=30)
+plt.suptitle("Distribution of Numerical Features")
+plt.show()
+
+plt.figure(figsize=(14, 8))
+sns.boxplot(data=df[numeric_cols])
+plt.title("Boxplot of Numerical Features")
+plt.xticks(rotation=90)
+plt.show()</code></pre>
+    </div>
+
+    <p>Categorical Feature Analysis</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+
+for col in categorical_cols:
+    plt.figure(figsize=(12,4))
+    sns.countplot(data=df, x=col, order=df[col].value_counts().index)
+    plt.title(f"Countplot: {col}")
+    plt.xticks(rotation=45)
+    plt.show()</code></pre>
+    </div>
+
+    <p>Correlation Analysis</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">plt.figure(figsize=(12,8))
+corr = df[numeric_cols].corr()
+sns.heatmap(corr, annot=True, fmt=".2f", cmap='coolwarm')
+plt.title("Correlation Heatmap")
+plt.show()</code></pre>
+    </div>
+
+    <p>Bivariate Analysis Feature VS Target</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python"># Numeric vs Target
+for col in numeric_cols:
+    plt.figure(figsize=(8,4))
+    sns.boxplot(x=df["target"], y=df[col])
+    plt.title(f"{col} vs Target")
+    plt.show()
+
+# Categorical vs Target
+for col in categorical_cols:
+    plt.figure(figsize=(9,4))
+    sns.barplot(x=col, y="target", data=df)
+    plt.title(f"{col} vs Target")
+    plt.xticks(rotation=45)
+    plt.show()</code></pre>
+    </div>
+
+    <p>Outlier Detection</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">Q1 = df[numeric_cols].quantile(0.25)
+Q3 = df[numeric_cols].quantile(0.75)
+IQR = Q3 - Q1
+outliers = ((df[numeric_cols] < (Q1 - 1.5 * IQR)) | 
+            (df[numeric_cols] > (Q3 + 1.5 * IQR))).sum()
+outliers</code></pre>
+    </div>
+
+    <p>Skewness Analysis</p>
+    <div class="code-holder">
+<pre><code class="language-python">sns.pairplot(df[numeric_cols].sample(500), diag_kind="kde")
+plt.show()</code></pre>
+    </div>
+
+    <!-- Missing Value Treatment -->
+    <h2>Data Cleaning & Feature Engineering</h2>
+    <p>Missing Value Treatment</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">def auto_impute_numeric(series):
+    s = series.dropna()
+    if len(s) == 0:
+        return series
+    
+    skew = s.skew()
+
+    Q1 = s.quantile(0.25)
+    Q3 = s.quantile(0.75)
+    IQR = Q3 - Q1
+    
+    outliers = ((s < (Q1 - 1.5 * IQR)) | (s > (Q3 + 1.5 * IQR))).sum()
+    ratio = outliers / len(s)
+
+    if skew > 1 or ratio > 0.01:
+        fill_val = s.median()
+        method = "median"
+    else:
+        fill_val = s.mean()
+        method = "mean"
+
+    return series.fillna(fill_val), method, fill_val
+
+def treat_missing_values_auto(df, drop_threshold=0.50, verbose=True):
+    df = df.copy()
+    report = {"dropped": [], "imputed_num": {}, "imputed_cat": {}}
+    missing_pct = df.isnull().mean()
+    cols_to_drop = missing_pct[missing_pct > drop_threshold].index.tolist()
+    df.drop(columns=cols_to_drop, inplace=True)
+    report["dropped"] = cols_to_drop
+
+    for col in df.columns:
+        if df[col].isnull().sum() == 0:
+            continue
+
+        if df[col].dtype in ["float64", "int64"]:
+            filled, method, fill_val = auto_impute_numeric(df[col])
+            df[col] = filled
+            report["imputed_num"][col] = {"method": method, "fill_value": fill_val}
+        else:
+            fill_val = df[col].mode().dropna()[0] if len(df[col].mode()) else "Unknown"
+            df[col].fillna(fill_val, inplace=True)
+            report["imputed_cat"][col] = fill_val
+
+    return df, report
+
+loan_clean, loan_report = treat_missing_values_auto(df)</code></pre>
+    </div>
+
+    <p>Outlier Treatment</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">def treat_outliers_auto(df, lower=0.01, upper=0.99):
+    df = df.copy()
+    report = {}
+    for col in df.select_dtypes(include=['float64', 'int64']):
+        if df[col].nunique() <= 1:
+            continue
+        low = df[col].quantile(lower)
+        high = df[col].quantile(upper)
+        df[col] = df[col].clip(low, high)
+        report[col] = {"lower_cap": low, "upper_cap": high}
+    return df, report
+
+loan_cleaned, loan_outlier_report = treat_outliers_auto(loan_clean)</code></pre>
+    </div>
+
+    <p>Skewness Treatment</p>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">def treat_skewness_auto(df, skew_threshold=1):
+    df = df.copy()
+    report = {}
+    num_cols = df.select_dtypes(include=['float64','int64']).columns
+
+    for col in num_cols:
+        if df[col].nunique() <= 1:
+            continue
+        skew = df[col].skew()
+        if abs(skew) > skew_threshold:
+            if skew > 0:
+                df[col] = np.log1p(df[col])
+            else:
+                df[col] = np.square(df[col])
+            report[col] = {"original_skew": skew, "new_skew": df[col].skew()}
+    return df, report
+
+loan_cleaned, loan_skew_report = treat_skewness_auto(loan_cleaned)</code></pre>
+    </div>
+
+    <h2>Machine Learning Model</h2>
+
+    <p>Feature Selection</p>
+    <div class="code-holder">
+      <span class="code-label">Python</span>
+<pre><code class="language-python">import pandas as pd
+import numpy as np
+from sklearn.feature_selection import VarianceThreshold
+
+# Selecting numeric variables
+numeric_df = loan_cleaned.select_dtypes(include=[np.number])
+
+# Remove low variance features
+selector = VarianceThreshold(threshold=0.0)
+numeric_reduced = selector.fit_transform(numeric_df)
+
+selected_numeric_cols = numeric_df.columns[selector.get_support()]
+
+# Combine with categorical
+selected_df = pd.concat([
+    loan_cleaned[selected_numeric_cols],
+    loan_cleaned.select_dtypes(exclude=[np.number])
+], axis=1)
+
+# Remove highly correlated features
+corr = selected_df.select_dtypes(include=[np.number]).corr()
+upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+
+high_corr_cols = [col for col in upper.columns if any(upper[col] > 0.9)]
+
+selected_df = selected_df.drop(columns=high_corr_cols, errors='ignore')</code></pre>
+    </div>
+
+    <p>Train-Test Split</p>
+    <div class="code-holder">
+      <span class="code-label">Python</span>
+<pre><code class="language-python">from sklearn.model_selection import train_test_split
+
+X = selected_df.drop('Target', axis=1)
+y = selected_df['Target']
+
+X = pd.get_dummies(X, drop_first=True)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=42, stratify=y
+)</code></pre>
+    </div>
+
+    <p>Hyperparameter Tuning</p>
+    <div class="code-holder">
+      <span class="code-label">Python</span>
+<pre><code class="language-python">from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import RandomizedSearchCV
+
+param_grid = {
+    'n_estimators': [200,400,600,800,1000],
+    'max_depth': [6,8,10,12,15,None],
+    'min_samples_split': [2,5,10],
+    'min_samples_leaf': [1,2,4],
+    'max_features': ['sqrt','log2']
+}
+
+rf = RandomForestClassifier(random_state=42, class_weight='balanced')
+
+search = RandomizedSearchCV(
+    rf,
+    param_grid,
+    n_iter=25,
+    cv=5,
+    scoring='roc_auc',
+    random_state=42,
+    n_jobs=-1,
+    verbose=2
+)
+
+search.fit(X_train, y_train)</code></pre>
+    </div>
+
+    <p>Random Forest Model</p>
+    <div class="code-holder">
+      <span class="code-label">Python</span>
+<pre><code class="language-python">best_rf = RandomForestClassifier(
+    n_estimators = search.best_params_['n_estimators'],
+    max_depth = search.best_params_['max_depth'],
+    min_samples_split = search.best_params_['min_samples_split'],
+    min_samples_leaf = search.best_params_['min_samples_leaf'],
+    max_features = search.best_params_['max_features'],
+    class_weight='balanced',
+    random_state=42
+)
+
+best_rf.fit(X_train, y_train)</code></pre>
+    </div>
+
+    <p>Model Evaluation</p>
+    <div class="code-holder">
+      <span class="code-label">Python</span>
+<pre><code class="language-python">from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix
+
+y_pred = best_rf.predict(X_test)
+y_prob = best_rf.predict_proba(X_test)[:,1]
+
+print("ROC-AUC:", roc_auc_score(y_test, y_prob))
+print(classification_report(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred))</code></pre>
+    </div>
+
+    <p>Feature Importance</p>
+    <div class="code-holder">
+      <span class="code-label">Python</span>
+<pre><code class="language-python">import matplotlib.pyplot as plt
+import numpy as np
+
+importance = best_rf.feature_importances_
+idx = np.argsort(importance)[-20:]
+
+plt.figure(figsize=(10,8))
+plt.barh(range(len(idx)), importance[idx])
+plt.yticks(range(len(idx)), X.columns[idx])
+plt.title("Top 20 Feature Importances")
+plt.show()</code></pre>
+    </div>
+      
+      <h2>Model Explainability with SHAP</h2>
+
+<p>Using SHAP to understand feature importance and contribution to model predictions.</p>
+
+<div class="code-holder">
+  <span class="code-label">Python</span>
+  <pre><code class="language-python">
+import shap
+
+# Initialize SHAP explainer
+explainer = shap.TreeExplainer(rf_model)
+shap_values = explainer.shap_values(X_train)
+
+# Summary plot
+shap.summary_plot(shap_values, X_train, plot_type="bar")
+
+# Dependence plot for top features
+top_features = X_train.columns[:5]
+for feature in top_features:
+    shap.dependence_plot(feature, shap_values[1], X_train)
+</code></pre>
+</div>
+
+
+    <h2>Propensity Score Generation</h2>
+    <div class="code-holder">
+        <span class="code-label">Python</span>
+<pre><code class="language-python">df_model['propensity_score'] = rf.predict_proba(X)[:, 1]
+propensity_output = df_model[['customer_id', 'propensity_score']]
+propensity_output.head()</code></pre>
+    </div>
+
+
+    <!-- Conclusion -->
+    <h2>Conclusion</h2>
+    <p>
+This project successfully developed a Random Forest-based Call Center Propensity Model to identify customers with high likelihood of taking a repeat Micro Enterprise Loan (MEL). 
+By integrating data from loan applications, disbursements, performance, personal information, and credit bureau data, the model enabled data-driven prioritization of call center efforts. 
+The approach improved targeting efficiency, increased engagement, and optimized outreach strategy, resulting in a measurable uplift in customer conversions. 
+Additionally, the use of SHAP for model interpretability provided actionable insights into key drivers influencing customer propensity, helping stakeholders make informed decisions.
+</p>
+    <a href="index.html" class="back-btn">Back to Portfolio</a>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
