@@ -7,12 +7,31 @@ window.addEventListener('load', () => {
     });
 });
 
-// Simple contact form feedback (no backend)
+// Contact form with Formspree
 const form = document.getElementById('contactForm');
 const formMessage = document.getElementById('formMessage');
 
-form.addEventListener('submit', e => {
+form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    formMessage.textContent = 'Thank you! Your message has been sent.';
-    form.reset();
+
+    formMessage.textContent = "Sending...";
+
+    const formData = new FormData(form);
+
+    try {
+        const response = await fetch(form.action, {
+            method: form.method,
+            body: formData,
+            headers: { Accept: "application/json" }
+        });
+
+        if (response.ok) {
+            formMessage.textContent = "Message sent successfully!";
+            form.reset();
+        } else {
+            formMessage.textContent = "Oops! Something went wrong.";
+        }
+    } catch (error) {
+        formMessage.textContent = "Network error. Please try again.";
+    }
 });
