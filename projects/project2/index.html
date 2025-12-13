@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JLG Network Analysis Model</title>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<!-- PrismJS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+
+<!-- Custom CSS -->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="header-container">
+    <h1>JLG Network Analysis Model</h1>
+    <p class="subtitle">Graph Analytics • Risk Clustering • Customer Network Intelligence</p>
+  </div>
+  <div class="header-decor"></div>
+</header>
+
+<main>
+
+  <!-- Business Problem -->
+  <section class="card">
+    <h2>Business Problem</h2>
+    <p>
+      In Joint Liability Group (JLG) lending, customers form groups and center-level networks where the repayment
+      behavior of one borrower can influence others. Traditional risk assessment focuses on individual behavior,
+      ignoring hidden social linkages that drive contagion risk, cross-group exposure, and default clustering.
+    </p>
+    <p>
+      The business challenge was to detect <strong>high-risk customer clusters, external junk networks, and 
+      contagion patterns</strong> to improve credit underwriting and reduce default rates.
+    </p>
+  </section>
+
+  <!-- Project Overview -->
+  <section class="card">
+    <h2>Project Overview</h2>
+    <p>
+      Developed a <strong>network graph–based risk scoring model</strong> for JLG customers using NetworkX & graph analytics.
+      The model identifies:
+    </p>
+    <ul>
+      <li>High-risk clusters and communities</li>
+      <li>Node influence, centrality, and contagion paths</li>
+      <li>External junk linkages across centers or branches</li>
+      <li>Behavioral risk spilled through social ties</li>
+    </ul>
+    <p>
+      Insights generated were used to enhance credit profiling and reduce default risk by <strong>6%</strong>.
+    </p>
+  </section>
+
+  <!-- Project Architecture -->
+  <section class="card">
+    <h2>Project Architecture</h2>
+    <ul>
+      <li>Data Extraction (SQL)</li>
+      <li>Entity Linking & Relationship Mapping</li>
+      <li>Network Graph Construction</li>
+      <li>Network Analysis (Centrality, Communities, Influence)</li>
+      <li>Risk Propagation Modelling</li>
+      <li>Cluster Risk Score Generation</li>
+      <li>Portfolio Heatmap Development</li>
+      <li>Risk Reporting Dashboard</li>
+    </ul>
+  </section>
+
+  <!-- Data Requirements -->
+  <section class="card">
+    <h2>Data Requirements</h2>
+    <ul>
+      <li>Customer Master</li>
+      <li>JLG Group & Center Details</li>
+      <li>Loan Disbursement Data</li>
+      <li>Repayment & Performance Data</li>
+      <li>Cross-Branch Customer Mapping</li>
+      <li>Household/Family Linkage (Mobile, Address, KYC)</li>
+    </ul>
+  </section>
+
+  <!-- Data Extraction & Relationship Mapping -->
+  <section class="card">
+    <h2>Data Extraction & Relationship Mapping</h2>
+
+    <h3>1. JLG Customer & Group Master</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE jlg_customer_master AS
+SELECT 
+    customer_id,
+    customer_name,
+    mobile_no,
+    address_line,
+    village,
+    pincode,
+    center_id,
+    group_id,
+    branch_id,
+    aadhar_no,
+    family_id
+FROM s3.jlg_customer_master
+WHERE active_flag = 1;
+</code></pre>
+    </div>
+
+    <h3>2. Loan Disbursement Data (Last 24 Months)</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE jlg_loan_disb AS
+SELECT 
+    loan_id,
+    customer_id,
+    disbursement_date,
+    disbursed_amount,
+    product,
+    tenure,
+    branch_id
+FROM s3.loan_disbursement
+WHERE product = 'JLG'
+  AND disbursement_date BETWEEN DATE '2022-01-01' AND CURRENT_DATE;
+</code></pre>
+    </div>
+
+    <h3>3. Loan Performance (DPD History)</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE jlg_performance AS
+SELECT 
+    loan_id,
+    customer_id,
+    month,
+    dpd,
+    bucket
+FROM s3.loan_performance
+WHERE loan_id IN (SELECT loan_id FROM jlg_loan_disb);
+</code></pre>
+    </div>
+
+    <h3>4. Construct Customer–Customer Edges Based on Group Membership</h3>
+    <p>Customers in the same group have strong relationship ties.</p>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE edge_group_links AS
+SELECT 
+    a.customer_id AS cust1,
+    b.customer_id AS cust2,
+    a.group_id,
+    'GROUP_LINK' AS link_type
+FROM jlg_customer_master a
+JOIN jlg_customer_master b
+  ON a.group_id = b.group_id 
+ AND a.customer_id &lt; b.customer_id;
+</code></pre>
+    </div>
+
+    <h3>5. Center-Level Network Edges</h3>
+    <p>These reflect indirect influence through the same JLG center.</p>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE edge_center_links AS
+SELECT 
+    a.customer_id AS cust1,
+    b.customer_id AS cust2,
+    a.center_id,
+    'CENTER_LINK' AS link_type
+FROM jlg_customer_master a
+JOIN jlg_customer_master b
+  ON a.center_id = b.center_id
+ AND a.customer_id &lt; b.customer_id;
+</code></pre>
+    </div>
+
+    <h3>6. Edges Based on Shared Mobile Numbers (Household Linkage)</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE edge_mobile_links AS
+SELECT 
+    a.customer_id AS cust1,
+    b.customer_id AS cust2,
+    a.mobile_no,
+    'MOBILE_LINK' AS link_type
+FROM jlg_customer_master a
+JOIN jlg_customer_master b
+  ON a.mobile_no = b.mobile_no
+ AND a.mobile_no IS NOT NULL
+ AND a.customer_id &lt; b.customer_id;
+</code></pre>
+    </div>
+
+    <h3>7. Family ID Based Linkage (Strong Relationship Bond)</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE edge_family_links AS
+SELECT 
+    a.customer_id AS cust1,
+    b.customer_id AS cust2,
+    a.family_id,
+    'FAMILY_LINK' AS link_type
+FROM jlg_customer_master a
+JOIN jlg_customer_master b
+  ON a.family_id = b.family_id
+ AND a.family_id IS NOT NULL
+ AND a.customer_id &lt; b.customer_id;
+</code></pre>
+    </div>
+
+    <h3>8. Combine All Edges into a Unified Graph Edges Table</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE jlg_graph_edges AS
+SELECT * FROM edge_group_links
+UNION ALL
+SELECT * FROM edge_center_links
+UNION ALL
+SELECT * FROM edge_mobile_links
+UNION ALL
+SELECT * FROM edge_family_links;
+</code></pre>
+    </div>
+
+    <p>
+      This combined edge table forms the backbone of the JLG customer network graph used for 
+      community detection, contagion analysis, and cluster-level risk scoring.
+    </p>
+
+  </section>
+
+  <!-- Network Graph Construction -->
+  <section class="card">
+    <h2>Network Graph Construction (Python)</h2>
+
+    <h3>Importing Required Libraries</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">import pandas as pd
+import networkx as nx
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.set(style="whitegrid")
+</code></pre>
+    </div>
+
+    <h3>Load Node & Edge Data</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">nodes = pd.read_csv("jlg_customer_master.csv")
+edges = pd.read_csv("jlg_graph_edges.csv")
+
+print("Nodes:", nodes.shape)
+print("Edges:", edges.shape)
+
+display(nodes.head())
+display(edges.head())</code></pre>
+    </div>
+
+    <h3>Create Graph Object</h3>
+    <p>Each customer becomes a node. Edges represent relationships.</p>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Initialize Graph
+G = nx.Graph()
+
+# Add nodes
+for _, row in nodes.iterrows():
+    G.add_node(row['customer_id'], 
+               center=row['center_id'], 
+               group=row['group_id'],
+               branch=row['branch_id'])
+
+# Add edges with link type
+for _, row in edges.iterrows():
+    G.add_edge(row['cust1'], row['cust2'], link=row['link_type'])
+
+print("Total Nodes:", G.number_of_nodes())
+print("Total Edges:", G.number_of_edges())</code></pre>
+    </div>
+
+    <h3>Graph Cleaning: Remove Isolated Nodes</h3>
+    <p>Isolated customers do not provide network insights.</p>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">isolated = list(nx.isolates(G))
+G.remove_nodes_from(isolated)
+
+print("Removed isolated nodes:", len(isolated))
+print("Remaining Nodes:", G.number_of_nodes())</code></pre>
+    </div>
+
+    <h3>Largest Connected Component</h3>
+    <p>Focus analysis on the biggest connected customer network.</p>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">largest_cc = max(nx.connected_components(G), key=len)
+G_main = G.subgraph(largest_cc).copy()
+
+print("Largest Component Nodes:", G_main.number_of_nodes())
+print("Largest Component Edges:", G_main.number_of_edges())</code></pre>
+    </div>
+
+    <h3>Visualize Network Sample (for High-Level Insight)</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">sample_nodes = list(G_main.nodes())[:200]  # sample 200 nodes for clarity
+G_sample = G_main.subgraph(sample_nodes)
+
+plt.figure(figsize=(12, 10))
+pos = nx.spring_layout(G_sample, seed=42)
+nx.draw(G_sample, pos,
+        node_size=40,
+        node_color='skyblue',
+        edge_color='gray',
+        with_labels=False)
+plt.title("Sample JLG Customer Network")
+plt.show()</code></pre>
+    </div>
+
+    <h3>Degree Distribution (Network Connectivity Strength)</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">degrees = [val for (node, val) in G_main.degree()]
+
+plt.figure(figsize=(12, 6))
+sns.histplot(degrees, bins=30, kde=True)
+plt.title("Degree Distribution of JLG Customer Network")
+plt.xlabel("Degree (Number of Connections)")
+plt.ylabel("Number of Customers")
+plt.show()</code></pre>
+    </div>
+
+  </section>
+
+  <!-- Network Metrics & Community Detection -->
+  <section class="card">
+    <h2>Network Metrics & Community Detection</h2>
+
+    <h3>1. Centrality Metrics (Influence & Importance of Customer Nodes)</h3>
+    <p>
+      Centrality scores help identify influential customers who can spread risk through the network.
+      These act as *risk multipliers* within JLG groups.
+    </p>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Degree Centrality – direct connections
+degree_centrality = nx.degree_centrality(G_main)
+
+# Betweenness Centrality – bridge nodes between clusters
+bet_centrality = nx.betweenness_centrality(G_main, k=500, seed=42)
+
+# Closeness Centrality – nodes closest to others
+close_centrality = nx.closeness_centrality(G_main)
+
+# Eigenvector Centrality – influence score
+eigen_centrality = nx.eigenvector_centrality(G_main, max_iter=500)
+
+centrality_df = pd.DataFrame({
+    "customer_id": list(G_main.nodes()),
+    "degree": [degree_centrality[n] for n in G_main.nodes()],
+    "betweenness": [bet_centrality[n] for n in G_main.nodes()],
+    "closeness": [close_centrality[n] for n in G_main.nodes()],
+    "eigenvector": [eigen_centrality[n] for n in G_main.nodes()]
+})
+
+centrality_df.head()</code></pre>
+    </div>
+
+    <h3>Centrality Distribution</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">plt.figure(figsize=(14, 6))
+sns.histplot(centrality_df['degree'], bins=40, kde=True)
+plt.title("Degree Centrality Distribution")
+plt.show()</code></pre>
+    </div>
+
+
+    <h3>2. Community Detection (Cluster Identification)</h3>
+    <p>
+      Communities represent tightly connected customer clusters.  
+      High-risk clusters can show group-level default patterns.
+    </p>
+
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Louvain algorithm for community detection
+import community as community_louvain
+
+partition = community_louvain.best_partition(G_main)
+centrality_df['community'] = centrality_df['customer_id'].map(partition)
+
+# Number of detected communities
+centrality_df['community'].nunique()</code></pre>
+    </div>
+
+    <h3>Community Size Plot</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">plt.figure(figsize=(10, 5))
+centrality_df['community'].value_counts().head(20).plot(kind='bar')
+plt.title("Top 20 Largest Communities in JLG Network")
+plt.xlabel("Community ID")
+plt.ylabel("Number of Customers")
+plt.show()</code></pre>
+    </div>
+
+
+    <h3>3. Merge Network Metrics with Loan Performance</h3>
+    <p>
+      We link network influence with actual performance (DPD/Bucket).
+    </p>
+
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Load performance data
+performance = pd.read_csv("jlg_performance.csv")
+
+# Compute max DPD per customer
+perf_agg = performance.groupby("customer_id")['dpd'].max().reset_index()
+perf_agg.rename(columns={'dpd': 'max_dpd'}, inplace=True)
+
+# Merge performance with network centrality
+network_model_df = centrality_df.merge(perf_agg, on="customer_id", how="left")
+
+network_model_df.head()</code></pre>
+    </div>
+
+
+    <h3>4. Cluster-Level Risk Aggregation</h3>
+    <p>
+      Each community gets a <strong>cluster risk score</strong> based on the DPD of its members.
+    </p>
+
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">cluster_risk = network_model_df.groupby("community")['max_dpd'].mean().reset_index()
+cluster_risk.rename(columns={'max_dpd': 'cluster_avg_dpd'}, inplace=True)
+
+# Merge back
+network_model_df = network_model_df.merge(cluster_risk, on="community", how="left")
+
+network_model_df.head()</code></pre>
+    </div>
+
+    <h3>5. High-Risk Cluster Identification</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Define high risk cluster threshold
+risk_threshold = network_model_df['cluster_avg_dpd'].quantile(0.85)
+
+high_risk_clusters = cluster_risk[cluster_risk['cluster_avg_dpd'] >= risk_threshold]
+high_risk_clusters.head()</code></pre>
+    </div>
+
+    <h3>6. Visualizing High-Risk vs Low-Risk Clusters</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">plt.figure(figsize=(12, 6))
+sns.scatterplot(data=network_model_df,
+                x="degree", y="eigenvector",
+                hue=network_model_df['community'].isin(high_risk_clusters['community']),
+                palette={True: 'red', False: 'green'})
+plt.title("High-Risk vs Low-Risk JLG Network Clusters")
+plt.show()</code></pre>
+    </div>
+
+  </section>
+
+  <!-- Risk Propagation & Cluster Scoring -->
+  <section class="card">
+    <h2>Risk Propagation, Scoring & Portfolio Intelligence</h2>
+
+    <h3>1. Risk Propagation Model (Contagion Effect)</h3>
+    <p>
+      Risk propagates through network neighbors.  
+      A customer's final risk is influenced by:
+      <ul>
+        <li>Their own payment behavior</li>
+        <li>Neighbors' behavior</li>
+        <li>The weight of each link (group > family > center > mobile)</li>
+      </ul>
+    </p>
+
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Assign link weights
+link_weights = {
+    "GROUP_LINK": 1.0,
+    "FAMILY_LINK": 0.9,
+    "CENTER_LINK": 0.7,
+    "MOBILE_LINK": 0.5
+}
+
+# Add weights to graph
+for u, v, data in G_main.edges(data=True):
+    data['weight'] = link_weights.get(data['link'], 0.4)
+</code></pre>
+    </div>
+
+    <h3>Neighborhood Risk Influence Score</h3>
+    <p>
+      Captures how risky a customer’s neighbors are.
+    </p>
+
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Merge performance for propagation
+dpd_map = dict(zip(network_model_df['customer_id'], network_model_df['max_dpd']))
+
+nx.set_node_attributes(G_main, dpd_map, "dpd")
+
+# Calculate neighbor influence
+neighbor_risk = {}
+for node in G_main.nodes():
+    total_weight = 0
+    risk_sum = 0
+    for nbr in G_main.neighbors(node):
+        w = G_main[node][nbr]["weight"]
+        total_weight += w
+        risk_sum += w * G_main.nodes[nbr]["dpd"]
+    neighbor_risk[node] = risk_sum / total_weight if total_weight > 0 else 0
+
+network_model_df['neighbor_risk'] = network_model_df['customer_id'].map(neighbor_risk)
+network_model_df.head()</code></pre>
+    </div>
+
+
+    <h3>2. Cluster-Level Composite Risk Score</h3>
+    <p>Based on DPD + centrality + neighbor risk.</p>
+
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Normalize inputs
+from sklearn.preprocessing import MinMaxScaler
+
+sc = MinMaxScaler()
+
+network_model_df[['degree_n','bet_n','close_n','eigen_n','nbrisk_n']] = sc.fit_transform(
+    network_model_df[['degree','betweenness','closeness','eigenvector','neighbor_risk']]
+)
+
+# Composite centrality score
+network_model_df['centrality_score'] = (
+      0.30 * network_model_df['degree_n']
+    + 0.25 * network_model_df['bet_n']
+    + 0.20 * network_model_df['eigen_n']
+    + 0.15 * network_model_df['close_n']
+    + 0.10 * network_model_df['nbrisk_n']
+)
+</code></pre>
+    </div>
+
+    <h3>Cluster Risk Scoring</h3>
+
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">cluster_scores = network_model_df.groupby('community').agg({
+    'centrality_score': 'mean',
+    'neighbor_risk': 'mean',
+    'cluster_avg_dpd': 'mean'
+}).reset_index()
+
+# Normalize cluster risk
+cluster_scores[['cluster_risk_norm']] = sc.fit_transform(
+    cluster_scores[['cluster_avg_dpd']]
+)
+
+cluster_scores.head()
+</code></pre>
+    </div>
+
+
+    <h3>3. Final Customer Risk Score (0–100)</h3>
+    <p>
+      Higher score → higher risk.
+    </p>
+
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Merge cluster risk
+network_model_df = network_model_df.merge(
+    cluster_scores[['community','cluster_risk_norm']],
+    on='community', how='left'
+)
+
+# Final weighted score
+network_model_df['final_risk_score'] = (
+      0.40 * network_model_df['cluster_risk_norm']
+    + 0.35 * network_model_df['centrality_score']
+    + 0.25 * network_model_df['nbrisk_n']
+) * 100
+
+network_model_df[['customer_id','final_risk_score']].head()</code></pre>
+    </div>
+
+
+    <h3>4. Portfolio Heatmap</h3>
+    <p>
+      Visualizing risk across JLG centers.
+    </p>
+
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Merge centers back
+network_model_df = network_model_df.merge(
+    nodes[['customer_id','center_id','branch_id']],
+    on='customer_id', how='left'
+)
+
+heatmap_df = network_model_df.groupby('center_id')['final_risk_score'].mean().reset_index()
+
+plt.figure(figsize=(14,6))
+sns.barplot(data=heatmap_df, x='center_id', y='final_risk_score', palette='coolwarm')
+plt.xticks(rotation=90)
+plt.title("Center-Level Average Risk Score Heatmap")
+plt.show()</code></pre>
+    </div>
+
+
+    <h3>5. Branch-Level Portfolio Risk Summary</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">branch_risk = network_model_df.groupby('branch_id')['final_risk_score'].mean().reset_index()
+
+plt.figure(figsize=(14,6))
+sns.barplot(data=branch_risk, x='branch_id', y='final_risk_score', palette='Reds')
+plt.xticks(rotation=45)
+plt.title("Branch-Level Portfolio Risk (Aggregated)")
+plt.show()</code></pre>
+    </div>
+
+  </section>
+
+  <!-- Insights & Conclusion -->
+  <section class="card">
+    <h2>Key Insights & Business Impact</h2>
+
+    <p>
+      The JLG Network Analysis model provided a deep understanding of how customer behavior 
+      spreads within interconnected social and financial structures. By leveraging graph analytics,
+      the model detected hidden behavioral patterns that traditional underwriting methods miss.
+    </p>
+
+    <h3>Key Insights</h3>
+    <ul>
+      <li><strong>Clusters with high internal connectivity</strong> showed higher repayment contagion.</li>
+      <li><strong>Group-linked edges</strong> had the strongest influence on risk spread (weight = 1.0).</li>
+      <li><strong>Family connections</strong> often created multi-loan stress pockets.</li>
+      <li>High-degree nodes (influencers) significantly elevated total cluster-level risk.</li>
+      <li>Louvain communities helped isolate <strong>junk networks</strong> and external links.</li>
+      <li>Network risk was strongly correlated with real DPD behavior.</li>
+    </ul>
+
+    <h3>Business Impact</h3>
+    <ul>
+      <li>Reduced portfolio default rate by <strong>6%</strong> through targeted interventions.</li>
+      <li>Enabled RM teams to identify high-risk centers and clusters proactively.</li>
+      <li>Improved borrower profiling and credit decisioning using network-driven risk signals.</li>
+      <li>Helped detect external junk networks and cross-center risk propagation paths.</li>
+      <li>Enhanced overall portfolio health with heatmap-driven monitoring.</li>
+    </ul>
+      </section>
+
+  <section class="card">
+    <h2>Conclusion</h2>
+    <p>
+      This project demonstrated the power of network science in microfinance lending.  
+      By modeling real-world social interactions and financial linkages within JLG groups, 
+      the analysis uncovered hidden risk structures and contagion channels.  
+      The final risk scoring framework—combining centrality, community strength, and 
+      neighbor influence—offered a comprehensive way to quantify customer-level and 
+      cluster-level risk.
+    </p>
+    <p>
+      This model now serves as a strategic risk tool for underwriting, field operations,
+      and collection teams, driving more informed and impactful decision-making.
+    </p>
+  </section>
+
+  <!-- Back to Portfolio -->
+  <a href="https://rupesh-bawane-work.github.io/profile/#projects" class="back-btn">Back to Portfolio</a>
+
+</main>
+
+<!-- PrismJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+
+</body>
+</html>
