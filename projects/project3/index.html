@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>No-Hit Scorecard Model</title>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<!-- PrismJS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+
+<!-- Custom CSS -->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="header-container">
+    <h1>No-Hit Scorecard for Consumer Durable Loans</h1>
+    <p class="subtitle">Decision Tree • Application Scoring 300–900</p>
+  </div>
+  <div class="header-decor"></div>
+</header>
+
+<main>
+  <!-- Business Problem -->
+  <section class="card">
+    <h2>Business Problem</h2>
+    <p>For consumer durable loans, many applicants have limited or no credit history. Branch Relationship Managers need a quick and reliable way to assess creditworthiness of such "No-Hit" customers. The challenge was to develop a data-driven scoring approach to predict repayment potential and enable strategic targeting, unlocking new business opportunities while controlling risk.</p>
+  </section>
+
+  <!-- Project Overview -->
+  <section class="card">
+    <h2>Project Overview</h2>
+    <p>This project develops a Decision Tree-based No-Hit Scorecard to evaluate applicants with limited credit history. Using historical performance of previous No-Hit applicants, the model identifies key characteristics of good vs bad customers and outputs a **score between 300–900** for new applicants.</p>
+  </section>
+
+  <!-- Project Architecture -->
+  <section class="card">
+    <h2>Project Architecture</h2>
+    <ul>
+      <li>Data Extraction (SQL)</li>
+      <li>Feature Engineering & Variable Creation</li>
+      <li>Exploratory Data Analysis (EDA)</li>
+      <li>Decision Tree Model Training (Python)</li>
+      <li>Hyperparameter Tuning & Variable Selection</li>
+      <li>Model Evaluation</li>
+      <li>Scorecard Mapping & Deployment</li>
+    </ul>
+  </section>
+
+  <!-- Data Requirement -->
+  <section class="card">
+    <h2>Data Requirements</h2>
+    <ul>
+      <li>Loan Application Data</li>
+      <li>Loan Disbursement Data (Jan 2022 – Jun 2022)</li>
+      <li>Loan Performance Data</li>
+      <li>Credit Bureau Hit/NoHit Indicator</li>
+      <li>Personal & Socio-economic Data</li>
+      <li>Behavioral Proxy Data (Utility, Mobile Wallet, etc.)</li>
+    </ul>
+  </section>
+
+  <!-- Methodology -->
+  <section class="card">
+    <h2>Methodology</h2>
+    <ol>
+      <li><strong>Define Target Population:</strong> Filter loans disbursed between Jan’22 – Jun’22 and identify No-Hit customers.</li>
+      <li><strong>Gather Performance Data:</strong> Track actual repayment behavior for these No-Hit customers to derive patterns.</li>
+      <li><strong>Feature Engineering:</strong> Create features based on demographics, socio-economic data, loan attributes, and behavioral proxies.</li>
+      <li><strong>Exploratory Data Analysis:</strong> Univariate, bivariate, correlation analysis, missing values, and outlier detection.</li>
+      <li><strong>Variable Selection:</strong> Identify strongest predictors of good vs bad No-Hit applicants using statistical tests and feature importance.</li>
+      <li><strong>Model Training:</strong> Train Decision Tree with hyperparameter tuning (max_depth, min_samples_split, min_samples_leaf, criterion).</li>
+      <li><strong>Evaluation Metrics:</strong> ROC-AUC, Gini, KS statistic, Lift analysis, Confusion Matrix, and F1-score.</li>
+      <li><strong>Scorecard Mapping:</strong> Convert predicted probabilities to a **score between 300–900**, maintaining monotonicity and interpretability.</li>
+      <li><strong>Deployment:</strong> RM enters No-Hit applicant details → model outputs a credit score.</li>
+    </ol>
+  </section>
+
+  <!-- Data Extraction & Variable Creation -->
+  <section class="card">
+    <h2>Data Extraction & Feature Engineering</h2>
+
+    <h3>No-Hit Customer Identification (Jan’22 – Jun’22)</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE nohit_customers AS
+SELECT application_id, customer_id, loan_id, application_date, bureau_hit_flag
+FROM s3.loan_application
+WHERE application_date BETWEEN DATE '2022-01-01' AND DATE '2022-06-30'
+  AND bureau_hit_flag = 'NoHit';</code></pre>
+    </div>
+
+    <h3>Loan Disbursement & Performance Details</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE nohit_loan_disbursement AS
+SELECT a.loan_id, a.customer_id, a.disbursement_date, a.disbursed_amount, b.dpd_string, b.closing_date
+FROM s3.loan_disbursement a
+JOIN s3.loan_performance b
+ON a.loan_id = b.loan_id
+WHERE a.customer_id IN (SELECT customer_id FROM nohit_customers);</code></pre>
+    </div>
+
+    <h3>Customer Demographics & Socio-Economic Data</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE customer_details AS
+SELECT c.customer_id, c.date_of_birth, c.age, c.gender, c.marital_status, c.income,
+       c.education, c.occupation, c.state, c.city, c.language, c.family_member_count
+FROM s3.personal_details c
+WHERE c.customer_id IN (SELECT customer_id FROM nohit_customers);</code></pre>
+    </div>
+
+    <h3>Derived Performance Variables</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">import pandas as pd
+import numpy as np
+
+# Split DPD string into max delinquency over different periods
+def max_dpd(dpd):
+    dpd = str(dpd)
+    max1 = int(max(dpd[-3:])) if len(dpd) >= 3 else int(max(dpd))
+    max3 = int(max(dpd[-9:])) if len(dpd) >= 9 else int(max(dpd))
+    max6 = int(max(dpd[-18:])) if len(dpd) >= 18 else int(max(dpd))
+    max12 = int(max(dpd[-36:])) if len(dpd) >= 36 else int(max(dpd))
+    return pd.Series([max1, max3, max6, max12])
+
+nohit_loan_disbursement[['max_dpd_1m','max_dpd_3m','max_dpd_6m','max_dpd_12m']] = \
+    nohit_loan_disbursement['dpd_string'].apply(max_dpd)
+
+# Merge customer demographics with loan performance
+customer_df = pd.merge(customer_details, nohit_loan_disbursement, on='customer_id', how='left')</code></pre>
+    </div>
+
+    <h3>Feature Engineering: Socio-Economic & Loan Attributes</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Loan to income ratio
+customer_df['loan_to_income'] = customer_df['disbursed_amount'] / (customer_df['income'] + 1)
+
+# Age bucket
+customer_df['age_bucket'] = pd.cut(customer_df['age'], bins=[18,25,35,45,55,65,100], labels=False)
+
+# Family size bucket
+customer_df['family_size_bucket'] = pd.cut(customer_df['family_member_count'], bins=[0,2,4,6,10], labels=False)
+
+# Tenure of loan
+customer_df['loan_tenure_months'] = (customer_df['closing_date'] - customer_df['disbursement_date']).dt.days / 30</code></pre>
+    </div>
+  </section>
+
+  <!-- Exploratory Data Analysis -->
+  <section class="card">
+    <h2>Exploratory Data Analysis (EDA)</h2>
+
+    <h3>Importing Libraries</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.set(style="whitegrid", palette="Set2")</code></pre>
+    </div>
+
+    <h3>Basic Data Inspection</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">df = customer_df
+
+print("Shape:", df.shape)
+display(df.head())
+df.info()
+df.describe(include='all').T</code></pre>
+    </div>
+
+    <h3>Missing Value Analysis</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">missing = df.isnull().sum().sort_values(ascending=False)
+missing_pct = (df.isnull().mean() * 100).sort_values(ascending=False)
+missing_df = pd.concat([missing, missing_pct], axis=1, keys=['Missing', '% Missing'])
+display(missing_df)
+
+plt.figure(figsize=(12,6))
+sns.heatmap(df.isnull(), cbar=False)
+plt.title("Missing Value Heatmap")
+plt.show()</code></pre>
+    </div>
+
+    <h3>Numerical Feature Analysis</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">numeric_cols = df.select_dtypes(include=[np.number]).columns
+df[numeric_cols].hist(figsize=(16, 12), bins=30)
+plt.suptitle("Distribution of Numerical Features")
+plt.show()
+
+plt.figure(figsize=(14, 8))
+sns.boxplot(data=df[numeric_cols])
+plt.title("Boxplot of Numerical Features")
+plt.xticks(rotation=90)
+plt.show()</code></pre>
+    </div>
+
+    <h3>Categorical Feature Analysis</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+
+for col in categorical_cols:
+    plt.figure(figsize=(12,4))
+    sns.countplot(data=df, x=col, order=df[col].value_counts().index)
+    plt.title(f"Countplot: {col}")
+    plt.xticks(rotation=45)
+    plt.show()</code></pre>
+    </div>
+
+    <h3>Correlation Analysis</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">plt.figure(figsize=(12,8))
+corr = df[numeric_cols].corr()
+sns.heatmap(corr, annot=True, fmt=".2f", cmap='coolwarm')
+plt.title("Correlation Heatmap")
+plt.show()</code></pre>
+    </div>
+
+    <h3>Missing Value Treatment</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">def auto_impute_numeric(series):
+    s = series.dropna()
+    if len(s) == 0:
+        return series
+    skew = s.skew()
+    Q1 = s.quantile(0.25)
+    Q3 = s.quantile(0.75)
+    IQR = Q3 - Q1
+    outliers = ((s < (Q1 - 1.5 * IQR)) | (s > (Q3 + 1.5 * IQR))).sum()
+    ratio = outliers / len(s)
+    fill_val = s.median() if skew > 1 or ratio > 0.01 else s.mean()
+    return series.fillna(fill_val)
+
+for col in numeric_cols:
+    df[col] = auto_impute_numeric(df[col])
+
+for col in categorical_cols:
+    df[col].fillna(df[col].mode()[0], inplace=True)</code></pre>
+    </div>
+
+    <h3>Outlier Treatment</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">def treat_outliers(df):
+    df = df.copy()
+    for col in numeric_cols:
+        Q1 = df[col].quantile(0.25)
+        Q3 = df[col].quantile(0.75)
+        IQR = Q3 - Q1
+        df[col] = df[col].clip(Q1 - 1.5*IQR, Q3 + 1.5*IQR)
+    return df
+
+df = treat_outliers(df)</code></pre>
+    </div>
+
+    <h3>Skewness Treatment</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">for col in numeric_cols:
+    if abs(df[col].skew()) > 1:
+        df[col] = np.log1p(df[col] - df[col].min() + 1)</code></pre>
+    </div>
+  </section>
+
+  <!-- Machine Learning -->
+  <section class="card">
+    <h2>Machine Learning</h2>
+
+    <h3>Feature Selection</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">from sklearn.feature_selection import VarianceThreshold
+
+# Selecting numeric variables
+numeric_df = df.select_dtypes(include=[np.number]).drop(columns=['target'], errors='ignore')
+
+# Remove low variance features
+selector = VarianceThreshold(threshold=0.0)
+numeric_reduced = selector.fit_transform(numeric_df)
+
+selected_numeric_cols = numeric_df.columns[selector.get_support()]
+
+# Combine with categorical
+df_model = pd.concat([
+    df[selected_numeric_cols],
+    pd.get_dummies(df.select_dtypes(exclude=[np.number]), drop_first=True)
+], axis=1)</code></pre>
+    </div>
+
+    <h3>Train-Test Split</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">from sklearn.model_selection import train_test_split
+
+X = df_model.drop('target', axis=1)
+y = df['target']
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=42, stratify=y
+)</code></pre>
+    </div>
+
+    <h3>Decision Tree Model & Hyperparameter Tuning</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import GridSearchCV
+
+dt = DecisionTreeClassifier(random_state=42, class_weight='balanced')
+
+param_grid = {
+    'max_depth': [3,5,7,9,12,None],
+    'min_samples_split': [2,5,10,20],
+    'min_samples_leaf': [1,2,5,10],
+    'max_features': [None, 'sqrt', 'log2']
+}
+
+grid_search = GridSearchCV(
+    estimator=dt,
+    param_grid=param_grid,
+    scoring='roc_auc',
+    cv=5,
+    n_jobs=-1,
+    verbose=2
+)
+
+grid_search.fit(X_train, y_train)
+
+best_dt = grid_search.best_estimator_
+best_dt.fit(X_train, y_train)</code></pre>
+    </div>
+
+    <h3>Model Evaluation</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">from sklearn.metrics import roc_auc_score, classification_report, confusion_matrix
+
+y_pred = best_dt.predict(X_test)
+y_prob = best_dt.predict_proba(X_test)[:,1]
+
+print("ROC-AUC Score:", roc_auc_score(y_test, y_prob))
+print(classification_report(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred))</code></pre>
+    </div>
+
+    <h3>Feature Importance</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">import matplotlib.pyplot as plt
+import numpy as np
+
+importance = best_dt.feature_importances_
+idx = np.argsort(importance)[-20:]
+
+plt.figure(figsize=(10,8))
+plt.barh(range(len(idx)), importance[idx])
+plt.yticks(range(len(idx)), X.columns[idx])
+plt.title("Top 20 Feature Importances - Decision Tree")
+plt.show()</code></pre>
+    </div>
+  </section>
+
+  <!-- Scorecard & Model Explainability -->
+  <section class="card">
+    <h2>No-Hit Scorecard & Model Explainability</h2>
+
+    <h3>Generate Application Score (300-900)</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Map predicted probabilities to score range 300-900
+min_score = 300
+max_score = 900
+
+df_model['pred_prob'] = best_dt.predict_proba(X)[:,1]
+df_model['nohit_score'] = min_score + (max_score - min_score) * (1 - df_model['pred_prob'])
+
+# Round to nearest integer
+df_model['nohit_score'] = df_model['nohit_score'].round(0)
+
+# Final output for branch RM
+score_output = df[['customer_id']].copy()
+score_output['nohit_score'] = df_model['nohit_score']
+score_output.head()</code></pre>
+    </div>
+
+    <h3>SHAP for Explainability</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">import shap
+
+# Initialize SHAP explainer for Decision Tree
+explainer = shap.TreeExplainer(best_dt)
+shap_values = explainer.shap_values(X_train)
+
+# Summary plot for top contributing features
+shap.summary_plot(shap_values[1], X_train, plot_type='bar')
+
+# Dependence plots for top 5 features
+top_features = X_train.columns[np.argsort(best_dt.feature_importances_)[-5:]]
+for feature in top_features:
+    shap.dependence_plot(feature, shap_values[1], X_train)</code></pre>
+    </div>
+
+    <h3>Propensity Score Output</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Propensity score is essentially probability of being 'good customer'
+propensity_output = df[['customer_id']].copy()
+propensity_output['propensity_score'] = df_model['pred_prob']
+propensity_output.head()</code></pre>
+    </div>
+
+    <h3>Business Usage</h3>
+    <p>Relationship Managers (RMs) can input details of a No-Hit customer at the branch. The model predicts a <strong>No-Hit Score (300–900)</strong> indicating creditworthiness. Higher scores indicate higher probability of being a good customer. SHAP explainability provides insight into which features most influenced the score.</p>
+  </section>
+
+  <!-- Conclusion -->
+  <section class="card">
+    <h2>Conclusion</h2>
+    <p>
+      This project successfully developed a Decision Tree-based No-Hit Scorecard Model for Consumer Durable Loan applicants with limited credit history. By analyzing historical No-Hit applications between Jan'22–Jun'22 and their subsequent loan performance, the model identified key characteristics of good vs. bad customers. 
+    </p>
+    <p>
+      The model enables branch Relationship Managers to assign a No-Hit Score (300–900) to new applicants, facilitating data-driven credit decisioning and targeting. SHAP explainability ensures transparency in the scoring process, highlighting the most influential factors driving customer creditworthiness.
+    </p>
+    <p>
+      Business Impact: High-potential customer segments are identified early, unlocking new business opportunities, reducing default risk, and supporting strategic portfolio growth.
+    </p>
+  </section>
+
+  <!-- Back to Portfolio -->
+  <a href="https://rupesh-bawane-work.github.io/profile/#projects" class="back-btn">Back to Portfolio</a>
+
+</main>
+
+<!-- PrismJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+
+</body>
+</html>
