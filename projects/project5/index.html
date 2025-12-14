@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Micro Enterprise Loan Behavioral Scorecard</title>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<!-- PrismJS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+
+<!-- Custom CSS -->
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="header-container">
+    <h1>Micro Enterprise Loan Behavioral Scorecard</h1>
+    <p class="subtitle">Logistic Regression • Targeted Repeat Loan Propensity</p>
+  </div>
+  <div class="header-decor"></div>
+</header>
+
+<main>
+  <!-- Business Problem -->
+  <section class="card">
+    <h2>Business Problem</h2>
+    <p>Micro Enterprise Loan (MEL) customers are a key growth segment. Banks need to identify high-propensity customers for repeat loans while minimizing credit risk. Manual or intuition-based targeting leads to missed opportunities and inefficient resource allocation. The business challenge is to predict the probability of a customer taking a repeat MEL, enabling data-driven cross-sell strategies.</p>
+  </section>
+
+  <!-- Project Overview -->
+  <section class="card">
+    <h2>Project Overview</h2>
+    <p>This project develops a Logistic Regression-based Behavioral Scorecard Model for repeat MEL customers. The model integrates historical loan behavior, repayment patterns, and off-balance sheet data to identify key drivers of repeat lending. The scorecard outputs a propensity score, helping business teams prioritize high-probability customers for engagement.</p>
+  </section>
+
+  <!-- Project Architecture -->
+  <section class="card">
+    <h2>Project Architecture</h2>
+    <ul>
+      <li>Data Extraction (SQL)</li>
+      <li>Feature Engineering & Variable Creation</li>
+      <li>Exploratory Data Analysis (EDA)</li>
+      <li>Missing Value & Outlier Treatment</li>
+      <li>Scorecard Modeling (Logistic Regression)</li>
+      <li>Scorecard Scaling & Points Assignment</li>
+      <li>Model Evaluation (KS, Gini, AUC)</li>
+      <li>Propensity Scoring & Deployment</li>
+    </ul>
+  </section>
+
+  <!-- Data Requirement -->
+  <section class="card">
+    <h2>Data Requirement</h2>
+    <ul>
+      <li>Loan Application</li>
+      <li>Loan Disbursement</li>
+      <li>Loan Performance / DPD Data</li>
+      <li>Personal Demographics</li>
+      <li>Credit Bureau Data</li>
+      <li>Call Center / Engagement Data</li>
+    </ul>
+  </section>
+
+  <!-- Data Extraction & Variable Creation -->
+  <section class="card">
+    <h2>Data Extraction & Variable Creation</h2>
+
+    <!-- Target: Repeat Loan -->
+    <h3>Repeat Loan Target (Aug23–Oct23)</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE repeat_loan_target AS
+SELECT loan_id, customer_id, MAX(disbursement_flag) AS target
+FROM s3.call_table
+WHERE product = 'MEL'
+  AND call_date BETWEEN DATE '2023-08-01' AND DATE '2023-10-31'
+GROUP BY loan_id, customer_id;</code></pre>
+    </div>
+
+    <!-- MEL Parent Loan Details -->
+    <h3>MEL Parent Loan Details</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE mel_parent_loans AS
+SELECT loan_id, customer_id, disbursement_date, disbursed_amount, closing_date, product, tenure
+FROM s3.loan_disbursement
+WHERE loan_id IN (SELECT DISTINCT parent_loan_id FROM repeat_loan_target)
+  AND EXTRACT(MONTH FROM AGE(closing_date, disbursement_date)) > 12;</code></pre>
+    </div>
+
+    <!-- Personal Details -->
+    <h3>Customer Personal Details</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.customer_profile AS
+SELECT 
+    c.customer_id, c.date_of_birth, c.age, c.state, c.gender, c.education, c.income,
+    c.marital_status, c.occupation, c.language, c.family_member_count, c.own_home,
+    c.house_area, c.farming_land, c.farming_area, c.number_of_vehicles, c.car_flag,
+    c.number_of_smartphones,
+    COUNT(l.loan_id) AS total_loans, 
+    MAX(l.disbursed_amount) AS max_loan_amt,
+    MIN(l.disbursed_amount) AS min_loan_amt, 
+    AVG(l.disbursed_amount) AS avg_loan_amt,
+    SUM(CASE WHEN l.secured_loan_flag = 1 THEN 1 ELSE 0 END) AS secured_loans,
+    SUM(CASE WHEN l.secured_loan_flag = 0 THEN 1 ELSE 0 END) AS unsecured_loans
+FROM s3.personal_details c
+LEFT JOIN s3.loan_disbursement l
+  ON c.customer_id = l.customer_id
+WHERE c.customer_id IN (SELECT DISTINCT customer_id FROM mel_parent_loans)
+GROUP BY c.customer_id;</code></pre>
+    </div>
+
+    <!-- MEL Loan Performance -->
+    <h3>MEL Loan Performance Data</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE mel_loan_performance AS
+SELECT loan_id, customer_id, dpd_string, closing_date
+FROM s3.loan_performance
+WHERE closing_date IS NOT NULL
+  AND loan_id IN (SELECT DISTINCT loan_id FROM mel_parent_loans);</code></pre>
+    </div>
+
+    <!-- All Loans of Customer -->
+    <h3>All Loans with Our Bank (excluding MEL)</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE all_other_loans AS
+SELECT loan_id, customer_id, disbursement_date, disbursed_amount, closing_date, product, tenure
+FROM s3.loan_disbursement
+WHERE customer_id IN (SELECT customer_id FROM my_lib.customer_profile)
+  AND product != 'MEL';
+
+CREATE TABLE my_lib.all_loan_cases AS
+SELECT a.*, b.application_id, b.application_date, b.branch_id, b.bureau_token, b.secured_loan_flag
+FROM all_other_loans a
+LEFT JOIN s3.loan_application b
+ON a.loan_id = b.loan_id;</code></pre>
+    </div>
+
+    <!-- Credit Bureau Data -->
+    <h3>Credit Bureau Data Extraction</h3>
+    <div class="code-box">
+      <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.bureau_data AS
+SELECT bureau_token, branch, disbursement_date, closing_date, product, dpd_string, institution, customer_id
+FROM s3.bureau_dump
+WHERE bureau_token IN (SELECT bureau_token FROM my_lib.all_loan_cases)
+  AND institution != 'OUR BANK';</code></pre>
+    </div>
+  </section>
+
+  <!-- Feature Engineering -->
+  <section class="card">
+    <h2>Feature Engineering & Behavioral Variables</h2>
+
+    <!-- MEL Performance Variable Creation -->
+    <h3>MEL Loan Performance Variables</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">import pandas as pd
+import numpy as np
+
+# Function to split DPD string into max DPD over different periods
+def split_dpd(dpd):
+    dpd = str(dpd)
+    periods = [3, 9, 18, 27, 36]
+    max_vals = []
+    for p in periods:
+        if len(dpd) >= p:
+            max_vals.append(int(max(dpd[-p:])))
+        else:
+            max_vals.append(int(max(dpd)))
+    return pd.Series(max_vals, index=[
+        'max_dpd_last1month',
+        'max_dpd_last3month',
+        'max_dpd_last6month',
+        'max_dpd_last9month',
+        'max_dpd_last12month'
+    ])
+
+mel_loan_perf = pd.read_csv("mel_loan_performance.csv")
+mel_loan_features = mel_loan_perf['dpd_string'].apply(split_dpd)
+customer_profile = pd.read_csv("customer_profile.csv")
+customer_profile = customer_profile.merge(mel_loan_features, left_on='customer_id', right_index=True, how='left')</code></pre>
+    </div>
+
+    <!-- ONUS / Other Loan Performance Variables -->
+    <h3>Other Loan Performance Variables</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Function to calculate max DPD per product
+def max_dpd_product(row, product):
+    dpd = str(row['dpd_string'])
+    if row['product'] != product:
+        return pd.Series([None]*5)
+    periods = [3, 9, 18, 27, 36]
+    return pd.Series([int(max(dpd[-p:])) if len(dpd) >= p else int(max(dpd)) for p in periods])
+
+all_loans = pd.read_csv("all_loan_cases.csv")
+products = all_loans['product'].unique()
+
+for prod in products:
+    cols = [f"{prod}_max_dpd_last1month",
+            f"{prod}_max_dpd_last3month",
+            f"{prod}_max_dpd_last6month",
+            f"{prod}_max_dpd_last9month",
+            f"{prod}_max_dpd_last12month"]
+    all_loans[cols] = all_loans.apply(lambda x: max_dpd_product(x, prod), axis=1)
+
+# Aggregate per customer
+agg_cols = [c for c in all_loans.columns if 'max_dpd' in c]
+onus_perf = all_loans.groupby('customer_id')[agg_cols].max().reset_index()
+customer_profile = customer_profile.merge(onus_perf, on='customer_id', how='left')</code></pre>
+    </div>
+
+    <!-- Credit Bureau Feature Creation -->
+    <h3>Credit Bureau Behavioral Variables</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">bureau = pd.read_csv("bureau_data.csv")
+for prod in bureau['product'].unique():
+    cols = [f"{prod}_bureau_max_dpd_last1month",
+            f"{prod}_bureau_max_dpd_last3month",
+            f"{prod}_bureau_max_dpd_last6month",
+            f"{prod}_bureau_max_dpd_last9month",
+            f"{prod}_bureau_max_dpd_last12month"]
+    bureau[cols] = bureau.apply(lambda x: max_dpd_product(x, prod), axis=1)
+
+bureau_agg_cols = [c for c in bureau.columns if 'bureau_max_dpd' in c]
+bureau_features = bureau.groupby('customer_id')[bureau_agg_cols].max().reset_index()
+customer_profile = customer_profile.merge(bureau_features, on='customer_id', how='left')</code></pre>
+    </div>
+
+    <!-- Final Feature Dataset -->
+    <h3>Final Feature Dataset</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Save final dataset for modeling
+customer_profile.to_csv("mel_scorecard_features.csv", index=False)
+print("Feature dataset ready for Logistic Regression.")</code></pre>
+    </div>
+  </section>
+
+  <!-- EDA & Data Cleaning -->
+  <section class="card">
+    <h2>Exploratory Data Analysis & Data Cleaning</h2>
+
+    <!-- Basic Data Inspection -->
+    <h3>Basic Data Structure</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.set(style="whitegrid", palette="Set2")
+
+df = pd.read_csv("mel_scorecard_features.csv")
+print("Shape:", df.shape)
+display(df.head())
+df.info()
+df.describe(include='all').T</code></pre>
+    </div>
+
+    <!-- Missing Value Analysis -->
+    <h3>Missing Value Analysis</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">missing = df.isnull().sum().sort_values(ascending=False)
+missing_pct = (df.isnull().mean() * 100).sort_values(ascending=False)
+missing_df = pd.concat([missing, missing_pct], axis=1, keys=['Missing', '% Missing'])
+display(missing_df)
+
+plt.figure(figsize=(12,6))
+sns.heatmap(df.isnull(), cbar=False)
+plt.title("Missing Value Heatmap")
+plt.show()</code></pre>
+    </div>
+
+    <!-- Outlier Detection & Treatment -->
+    <h3>Outlier Treatment</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">numeric_cols = df.select_dtypes(include=[np.number]).columns
+
+Q1 = df[numeric_cols].quantile(0.25)
+Q3 = df[numeric_cols].quantile(0.75)
+IQR = Q3 - Q1
+
+# Cap outliers
+df[numeric_cols] = df[numeric_cols].clip(Q1 - 1.5*IQR, Q3 + 1.5*IQR)</code></pre>
+    </div>
+
+    <!-- Skewness Treatment -->
+    <h3>Skewness Treatment</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">skew_threshold = 1
+for col in numeric_cols:
+    if df[col].nunique() <= 1:
+        continue
+    skew = df[col].skew()
+    if abs(skew) > skew_threshold:
+        if skew > 0:
+            df[col] = np.log1p(df[col])
+        else:
+            df[col] = np.square(df[col])</code></pre>
+    </div>
+
+    <!-- Missing Value Imputation -->
+    <h3>Missing Value Imputation</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Numeric columns: fill with median
+for col in numeric_cols:
+    df[col].fillna(df[col].median(), inplace=True)
+
+# Categorical columns: fill with mode
+categorical_cols = df.select_dtypes(include=['object', 'category']).columns
+for col in categorical_cols:
+    df[col].fillna(df[col].mode()[0], inplace=True)
+
+# Check missing values after treatment
+df.isnull().sum().sum()</code></pre>
+    </div>
+
+    <!-- Feature Encoding -->
+    <h3>Feature Encoding</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">df_encoded = pd.get_dummies(df, drop_first=True)
+print("Final dataset shape for modeling:", df_encoded.shape)</code></pre>
+    </div>
+  </section>
+
+  <!-- Logistic Regression Model -->
+  <section class="card">
+    <h2>Logistic Regression Model</h2>
+
+    <!-- Train-Test Split -->
+    <h3>Train-Test Split</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">from sklearn.model_selection import train_test_split
+
+X = df_encoded.drop(['customer_id', 'target'], axis=1)
+y = df_encoded['target']
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=42, stratify=y
+)
+print("Training shape:", X_train.shape)
+print("Testing shape:", X_test.shape)</code></pre>
+    </div>
+    
+    <h3>Hyper Parameter Tuning</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GridSearchCV
+
+param_grid = {
+    "C": [0.01, 0.1, 1, 10, 100]
+}
+
+grid = GridSearchCV(
+    LogisticRegression(max_iter=1000),
+    param_grid,
+    cv=5,
+    scoring="accuracy"
+)
+grid.fit(X_train, y_train)
+</code></pre>
+    </div>    
+
+    <!-- Model Training -->
+    <h3>Train Logistic Regression</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">
+log_model = LogisticRegression(
+    solver='liblinear',
+    class_weight='balanced',
+    random_state=42
+)
+log_model.fit(X_train, y_train)</code></pre>
+    </div>
+  </section>
+
+  <!-- Model Evaluation -->
+  <section class="card">
+    <h2>Model Evaluation</h2>
+    
+    <h3>Confusion Matrix</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
+cm = confusion_matrix(y_test, y_pred)
+ConfusionMatrixDisplay(cm).plot()
+</code></pre>
+    </div>
+    
+    <h3>F1-Score</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">from sklearn.metrics import classification_report
+
+print(classification_report(y_test, y_pred))
+</code></pre>
+    </div>
+    
+    <h3>ROC-AUC</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix
+
+y_pred = log_model.predict(X_test)
+y_prob = log_model.predict_proba(X_test)[:,1]
+
+print("ROC-AUC:", roc_auc_score(y_test, y_prob))
+print("Classification Report:\\n", classification_report(y_test, y_pred))
+print("Confusion Matrix:\\n", confusion_matrix(y_test, y_pred))
+
+# plot ROC
+import matplotlib.pyplot as plt
+
+fpr, tpr, _ = roc_curve(y_test, y_prob)
+plt.plot(fpr, tpr)
+plt.plot([0, 1], [0, 1], '--')
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve")
+plt.show()
+</code></pre>
+    </div>
+    
+<h3>Cross-Validation</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">from sklearn.model_selection import cross_val_score
+
+scores = cross_val_score(
+    model, X, y, cv=5, scoring="f1"
+)
+print("Mean F1:", scores.mean())
+</code></pre>
+    </div>
+  </section>
+
+  <!-- Conclusion -->
+  <section class="card">
+
+    <!-- Feature Importance -->
+    <h2>Feature Importance and Scoring</h2>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">import matplotlib.pyplot as plt
+import numpy as np
+
+importance = log_model.coef_[0]
+idx = np.argsort(np.abs(importance))[-20:]
+
+plt.figure(figsize=(10,8))
+plt.barh(range(len(idx)), importance[idx])
+plt.yticks(range(len(idx)), X.columns[idx])
+plt.title("Top 20 Logistic Regression Coefficients")
+plt.show()</code></pre>
+    </div>
+
+    <!-- Propensity Scoring -->
+    <h3>Propensity Scoring</h3>
+    <div class="code-box">
+      <span class="lang-tag">Python</span>
+<pre><code class="language-python">df['propensity_score'] = log_model.predict_proba(df_encoded.drop(['customer_id', 'target'], axis=1))[:,1]
+propensity_output = df[['customer_id','propensity_score']]
+propensity_output.head()</code></pre>
+    </div>
+  </section>
+
+  <!-- Conclusion -->
+  <section class="card">
+    <h2>Conclusion & Business Impact</h2>
+
+    <p>This project successfully developed a Logistic Regression-based Micro Enterprise Loan (MEL) 
+      Behavioral Scorecard to identify key drivers of repeat loan behavior. 
+      The model scores probability of good customer given his past ONUS(internal) and OFFUS(bureau) performance.</p>
+
+  </section>
+
+  <!-- Back to Portfolio -->
+  <a href="https://rupesh-bawane-work.github.io/profile/#projects" class="back-btn">Back to Portfolio</a>
+</main>
+
+<!-- PrismJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+
+</body>
+</html>
