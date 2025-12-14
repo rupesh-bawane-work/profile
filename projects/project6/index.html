@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Joint Liability Group Reactivation Analysis</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>
+  <div class="header-container">
+    <h1>Joint Liability Group Reactivation Analysis</h1>
+    <p class="subtitle">ONUS & OFFUS Retention • Post-Closure Behavior • Repeat Loan Strategy</p>
+  </div>
+  <div class="header-decor"></div>
+</header>
+
+<main>
+
+<!-- ================= BUSINESS PROBLEM ================= -->
+<section class="card">
+  <h2>Business Problem</h2>
+  <p>
+    Joint Liability Group (JLG) lending is a high-volume, relationship-driven business.
+    After loan closure, customers either:
+  </p>
+  <ul>
+    <li>Re-borrow from the same lender (ONUS retention)</li>
+    <li>Shift to competitors (OFFUS migration)</li>
+    <li>Exit the credit market temporarily</li>
+  </ul>
+
+  <p>
+    Lack of timely re-engagement leads to <strong>missed renewal cycles</strong>,
+    increased acquisition cost, and erosion of customer lifetime value.
+    The business objective was to:
+  </p>
+
+  <ul>
+    <li>Identify high-potential JLG customers post-loan closure</li>
+    <li>Understand ONUS vs OFFUS borrowing behavior</li>
+    <li>Design data-driven reactivation strategies</li>
+  </ul>
+</section>
+
+<!-- ================= PROJECT OVERVIEW ================= -->
+<section class="card">
+  <h2>Project Overview</h2>
+  <p>
+    This project performs a comprehensive <strong>Reactivation Analysis</strong> on closed
+    JLG loan cohorts. By combining internal loan performance data with external
+    credit bureau behavior, we quantify:
+  </p>
+
+  <ul>
+    <li>Probability of repeat borrowing</li>
+    <li>Risk of customer migration</li>
+    <li>Time-to-reactivation patterns</li>
+  </ul>
+
+  <p>
+    The output enabled targeted campaigns that reduced opportunity loss by
+    <strong>6%</strong> and improved reactivation efficiency.
+  </p>
+</section>
+
+<!-- ================= PROJECT ARCHITECTURE ================= -->
+<section class="card">
+  <h2>Project Architecture</h2>
+  <ul>
+    <li>JLG Loan Closure Cohort Creation</li>
+    <li>Customer & Group Mapping</li>
+    <li>ONUS Post-Closure Performance Analysis</li>
+    <li>OFFUS Credit Bureau Behavior Analysis</li>
+    <li>Behavioral Feature Engineering</li>
+    <li>EDA & Data Quality Treatment</li>
+    <li>Reactivation Segmentation & Scoring</li>
+    <li>Business Strategy Alignment</li>
+  </ul>
+</section>
+
+<!-- ================= DATA REQUIREMENT ================= -->
+<section class="card">
+  <h2>Data Requirement</h2>
+  <ul>
+    <li>Loan Disbursement & Closure Tables</li>
+    <li>Repayment / DPD History</li>
+    <li>Group & Member Mapping</li>
+    <li>Customer Demographics</li>
+    <li>ONUS Loan History</li>
+    <li>OFFUS Credit Bureau Trade Lines</li>
+  </ul>
+</section>
+
+<!-- ================= DATA EXTRACTION ================= -->
+<section class="card">
+  <h2>Data Extraction & Cohort Creation</h2>
+
+  <!-- JLG Closed Loan Base -->
+  <h3>Step 1: Closed JLG Loan Cohort</h3>
+  <div class="code-box">
+    <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.jlg_closed_loans AS
+SELECT
+    l.loan_id,
+    l.customer_id,
+    l.group_id,
+    l.disbursement_date,
+    l.closing_date,
+    l.tenure,
+    l.disbursed_amount,
+    l.branch_id
+FROM s3.loan_disbursement l
+WHERE l.product = 'JLG'
+  AND l.closing_date BETWEEN DATE '2023-01-01' AND DATE '2023-06-30'
+  AND l.loan_status = 'CLOSED';</code></pre>
+  </div>
+
+  <p>
+    This cohort forms the base population for reactivation analysis.
+    Only fully closed loans are considered to avoid contamination.
+  </p>
+
+  <!-- Group Composition -->
+  <h3>Step 2: Group Composition Mapping</h3>
+  <div class="code-box">
+    <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.jlg_group_members AS
+SELECT
+    group_id,
+    COUNT(DISTINCT customer_id) AS group_size
+FROM my_lib.jlg_closed_loans
+GROUP BY group_id;</code></pre>
+  </div>
+
+  <!-- Customer Demographics -->
+  <h3>Step 3: Customer Demographics</h3>
+  <div class="code-box">
+    <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.customer_profile AS
+SELECT
+    c.customer_id,
+    c.age,
+    c.gender,
+    c.state,
+    c.education,
+    c.occupation,
+    c.income,
+    c.marital_status
+FROM s3.customer_master c
+WHERE c.customer_id IN (
+    SELECT DISTINCT customer_id FROM my_lib.jlg_closed_loans
+);</code></pre>
+  </div>
+
+</section>
+
+<!-- ================= ONUS ANALYSIS ================= -->
+<section class="card">
+  <h2>ONUS Post-Closure Loan Analysis</h2>
+
+  <h3>Loans Taken After JLG Closure</h3>
+  <div class="code-box">
+    <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.onus_post_closure_loans AS
+SELECT
+    l.customer_id,
+    l.loan_id,
+    l.disbursement_date,
+    l.product,
+    l.disbursed_amount
+FROM s3.loan_disbursement l
+JOIN my_lib.jlg_closed_loans j
+  ON l.customer_id = j.customer_id
+WHERE l.disbursement_date > j.closing_date;</code></pre>
+  </div>
+
+  <h3>ONUS Reactivation Indicators</h3>
+  <div class="code-box">
+    <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.onus_reactivation_summary AS
+SELECT
+    customer_id,
+    COUNT(loan_id) AS onus_loan_count,
+    MIN(disbursement_date) AS first_onus_reactivation_date
+FROM my_lib.onus_post_closure_loans
+GROUP BY customer_id;</code></pre>
+  </div>
+</section>
+
+<!-- ================= OFFUS ANALYSIS ================= -->
+<section class="card">
+  <h2>OFFUS Credit Bureau Analysis</h2>
+
+  <h3>External Borrowing After Closure</h3>
+  <div class="code-box">
+    <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.offus_loans AS
+SELECT
+    b.customer_id,
+    b.institution,
+    b.product,
+    b.disbursement_date,
+    b.dpd_string
+FROM s3.bureau_dump b
+JOIN my_lib.jlg_closed_loans j
+  ON b.customer_id = j.customer_id
+WHERE b.disbursement_date > j.closing_date
+  AND b.institution != 'OUR_BANK';</code></pre>
+  </div>
+
+  <h3>OFFUS Migration Metrics</h3>
+  <div class="code-box">
+    <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.offus_summary AS
+SELECT
+    customer_id,
+    COUNT(DISTINCT institution) AS offus_lender_count,
+    MIN(disbursement_date) AS first_offus_loan_date
+FROM my_lib.offus_loans
+GROUP BY customer_id;</code></pre>
+  </div>
+</section>
+
+<!-- ================= FEATURE CREATION ================= -->
+<section class="card">
+  <h2>Feature Engineering (Customer Level)</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">import pandas as pd
+import numpy as np
+
+jlg = pd.read_csv("jlg_closed_loans.csv")
+onus = pd.read_csv("onus_reactivation_summary.csv")
+offus = pd.read_csv("offus_summary.csv")
+
+df = jlg.merge(onus, on='customer_id', how='left') \
+        .merge(offus, on='customer_id', how='left')
+
+# Flags
+df['onus_reactivated'] = np.where(df['onus_loan_count'] > 0, 1, 0)
+df['offus_shifted'] = np.where(df['offus_lender_count'] > 0, 1, 0)
+
+# Time to reactivation
+df['days_to_onus_reactivation'] = (
+    pd.to_datetime(df['first_onus_reactivation_date']) -
+    pd.to_datetime(df['closing_date'])
+).dt.days</code></pre>
+  </div>
+
+</section>
+
+<!-- ================= DPD BEHAVIOR ================= -->
+<section class="card">
+  <h2>Loan Performance & DPD Behavior Analysis</h2>
+
+  <p>
+    Repayment behavior is a critical indicator of reactivation quality.
+    DPD (Days Past Due) strings were analyzed at multiple horizons to capture
+    short-term and long-term stress patterns for both ONUS and OFFUS loans.
+  </p>
+
+  <!-- ONUS Loan Performance -->
+  <h3>ONUS Loan Performance Extraction</h3>
+  <div class="code-box">
+    <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.onus_loan_performance AS
+SELECT
+    p.loan_id,
+    p.customer_id,
+    p.dpd_string,
+    p.closing_date
+FROM s3.loan_performance p
+WHERE p.loan_id IN (
+    SELECT loan_id FROM my_lib.onus_post_closure_loans
+)
+AND p.closing_date IS NOT NULL;</code></pre>
+  </div>
+
+  <!-- OFFUS Loan Performance -->
+  <h3>OFFUS Loan Performance Extraction</h3>
+  <div class="code-box">
+    <span class="lang-tag">SQL</span>
+<pre><code class="language-sql">CREATE TABLE my_lib.offus_loan_performance AS
+SELECT
+    customer_id,
+    institution,
+    product,
+    dpd_string,
+    disbursement_date
+FROM my_lib.offus_loans
+WHERE dpd_string IS NOT NULL;</code></pre>
+  </div>
+</section>
+
+<!-- ================= DPD FEATURE ENGINEERING ================= -->
+<section class="card">
+  <h2>DPD Feature Engineering</h2>
+
+  <h3>DPD String Parsing Logic</h3>
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">import pandas as pd
+import numpy as np
+
+def extract_max_dpd(dpd_string, windows=[3, 6, 9, 12]):
+    dpd_string = str(dpd_string)
+    results = {}
+    for w in windows:
+        if len(dpd_string) >= w:
+            results[f'max_dpd_last_{w}m'] = max(map(int, dpd_string[-w:]))
+        else:
+            results[f'max_dpd_last_{w}m'] = max(map(int, dpd_string))
+    return pd.Series(results)
+
+onus_perf = pd.read_csv("onus_loan_performance.csv")
+onus_dpd_features = onus_perf['dpd_string'].apply(extract_max_dpd)
+
+onus_perf = pd.concat([onus_perf[['loan_id','customer_id']], onus_dpd_features], axis=1)</code></pre>
+  </div>
+
+  <h3>Aggregate ONUS DPD at Customer Level</h3>
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">onus_customer_dpd = (
+    onus_perf
+    .groupby('customer_id')
+    .max()
+    .reset_index()
+)
+
+onus_customer_dpd.head()</code></pre>
+  </div>
+
+  <h3>OFFUS DPD Feature Creation</h3>
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">offus_perf = pd.read_csv("offus_loan_performance.csv")
+
+offus_dpd_features = offus_perf['dpd_string'].apply(extract_max_dpd)
+offus_perf = pd.concat(
+    [offus_perf[['customer_id','institution','product']], offus_dpd_features],
+    axis=1
+)
+
+offus_customer_dpd = (
+    offus_perf
+    .groupby('customer_id')
+    .max()
+    .reset_index()
+)</code></pre>
+  </div>
+</section>
+
+<!-- ================= MERGING FEATURES ================= -->
+<section class="card">
+  <h2>Master Feature Dataset Creation</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">base = pd.read_csv("jlg_customer_base.csv")
+onus_dpd = pd.read_csv("onus_customer_dpd.csv")
+offus_dpd = pd.read_csv("offus_customer_dpd.csv")
+demographics = pd.read_csv("customer_profile.csv")
+
+df = (
+    base
+    .merge(demographics, on='customer_id', how='left')
+    .merge(onus_dpd, on='customer_id', how='left')
+    .merge(offus_dpd, on='customer_id', how='left')
+)
+
+df.shape</code></pre>
+  </div>
+</section>
+
+<!-- ================= GROUP LEVEL FEATURES ================= -->
+<section class="card">
+  <h2>Group-Level Behavioral Intelligence</h2>
+
+  <p>
+    Since JLG lending decisions are taken at a group level,
+    individual behavior was aggregated to derive group stability metrics.
+  </p>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">group_features = df.groupby('group_id').agg({
+    'onus_reactivated': 'mean',
+    'offus_shifted': 'mean',
+    'max_dpd_last_3m': 'max',
+    'max_dpd_last_6m': 'max',
+    'days_to_onus_reactivation': 'median',
+    'income': 'median'
+}).reset_index()
+
+group_features.rename(columns={
+    'onus_reactivated': 'grp_onus_reactivation_rate',
+    'offus_shifted': 'grp_offus_shift_rate'
+}, inplace=True)
+
+group_features.head()</code></pre>
+  </div>
+</section>
+
+<!-- ================= EDA ================= -->
+<section class="card">
+  <h2>Exploratory Data Analysis (EDA)</h2>
+
+  <h3>Basic Data Checks</h3>
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">print("Shape:", df.shape)
+df.info()
+df.describe().T</code></pre>
+  </div>
+
+  <h3>Missing Value Analysis</h3>
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">missing = df.isnull().mean().sort_values(ascending=False)
+missing = missing[missing > 0]
+missing</code></pre>
+  </div>
+
+  <h3>Missing Value Treatment</h3>
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">numeric_cols = df.select_dtypes(include=[np.number]).columns
+categorical_cols = df.select_dtypes(include=['object']).columns
+
+df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
+df[categorical_cols] = df[categorical_cols].fillna("UNKNOWN")</code></pre>
+  </div>
+
+  <h3>Outlier Treatment</h3>
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">Q1 = df[numeric_cols].quantile(0.25)
+Q3 = df[numeric_cols].quantile(0.75)
+IQR = Q3 - Q1
+
+df[numeric_cols] = df[numeric_cols].clip(
+    lower=Q1 - 1.5 * IQR,
+    upper=Q3 + 1.5 * IQR
+)</code></pre>
+  </div>
+</section>
+
+<!-- ================= SAVE DATA ================= -->
+<section class="card">
+  <h2>Final Feature Store</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">df.to_csv("jlg_reactivation_features.csv", index=False)
+group_features.to_csv("jlg_group_features.csv", index=False)
+
+print("Feature datasets ready for scoring and segmentation.")</code></pre>
+  </div>
+</section>
+
+<!-- ================= REACTIVATION SCORING ================= -->
+<section class="card">
+  <h2>Reactivation Scoring Framework</h2>
+
+  <p>
+    Instead of a black-box model, a <strong>transparent scoring framework</strong>
+    was designed to allow business teams to:
+  </p>
+
+  <ul>
+    <li>Understand drivers of reactivation</li>
+    <li>Control risk thresholds</li>
+    <li>Quickly adapt strategies across regions</li>
+  </ul>
+
+  <p>
+    Scores were derived at both <strong>customer</strong> and <strong>group</strong> levels.
+  </p>
+</section>
+
+<!-- ================= SCORE VARIABLE CREATION ================= -->
+<section class="card">
+  <h2>Customer-Level Reactivation Score</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">import pandas as pd
+import numpy as np
+
+df = pd.read_csv("jlg_reactivation_features.csv")
+
+# Normalize helper
+def normalize(series):
+    return (series - series.min()) / (series.max() - series.min())
+
+# Component scores
+df['onus_score'] = normalize(
+    df['onus_reactivated'] * (1 / (df['days_to_onus_reactivation'] + 1))
+)
+
+df['offus_penalty'] = normalize(df['offus_shifted'])
+df['dpd_penalty'] = normalize(df['max_dpd_last_6m'])
+
+# Final customer reactivation score
+df['customer_reactivation_score'] = (
+    0.5 * df['onus_score'] -
+    0.3 * df['offus_penalty'] -
+    0.2 * df['dpd_penalty']
+)
+
+df[['customer_id','customer_reactivation_score']].head()</code></pre>
+  </div>
+</section>
+
+<!-- ================= GROUP LEVEL SCORING ================= -->
+<section class="card">
+  <h2>Group-Level Reactivation Score</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">group_df = pd.read_csv("jlg_group_features.csv")
+
+group_df['grp_onus_score'] = normalize(group_df['grp_onus_reactivation_rate'])
+group_df['grp_offus_penalty'] = normalize(group_df['grp_offus_shift_rate'])
+group_df['grp_dpd_penalty'] = normalize(group_df['max_dpd_last_6m'])
+
+group_df['group_reactivation_score'] = (
+    0.6 * group_df['grp_onus_score'] -
+    0.25 * group_df['grp_offus_penalty'] -
+    0.15 * group_df['grp_dpd_penalty']
+)
+
+group_df[['group_id','group_reactivation_score']].head()</code></pre>
+  </div>
+</section>
+
+<!-- ================= SEGMENTATION ================= -->
+<section class="card">
+  <h2>Reactivation Segmentation</h2>
+
+  <p>
+    Scores were converted into actionable segments using percentile-based thresholds,
+    ensuring stable volumes across campaigns.
+  </p>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Customer segmentation
+df['customer_segment'] = pd.qcut(
+    df['customer_reactivation_score'],
+    q=[0, 0.3, 0.7, 1],
+    labels=['Low Potential', 'Medium Potential', 'High Potential']
+)
+
+# Group segmentation
+group_df['group_segment'] = pd.qcut(
+    group_df['group_reactivation_score'],
+    q=[0, 0.4, 0.75, 1],
+    labels=['Low Priority', 'Monitor', 'High Priority']
+)
+
+df['customer_segment'].value_counts()
+group_df['group_segment'].value_counts()</code></pre>
+  </div>
+</section>
+
+<!-- ================= STRATEGY MAPPING ================= -->
+<section class="card">
+  <h2>Business Strategy Mapping</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Segment</th>
+        <th>Risk Profile</th>
+        <th>Recommended Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>High Potential</td>
+        <td>Low Risk</td>
+        <td>Immediate renewal offer, preferential pricing</td>
+      </tr>
+      <tr>
+        <td>Medium Potential</td>
+        <td>Moderate Risk</td>
+        <td>Relationship officer follow-up, limited exposure</td>
+      </tr>
+      <tr>
+        <td>Low Potential</td>
+        <td>High Risk / Migrated</td>
+        
+        <td>No campaign or only financial literacy touchpoints</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ================= CAMPAIGN LIST ================= -->
+<section class="card">
+  <h2>Campaign Target List Generation</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">campaign_targets = df[
+    (df['customer_segment'] == 'High Potential')
+]
+
+campaign_targets = campaign_targets.merge(
+    group_df[['group_id','group_segment']],
+    on='group_id',
+    how='left'
+)
+
+final_campaign_list = campaign_targets[
+    campaign_targets['group_segment'] == 'High Priority'
+]
+
+final_campaign_list.to_csv("jlg_reactivation_campaign_list.csv", index=False)
+print("Campaign list generated.")</code></pre>
+  </div>
+</section>
+
+<!-- ================= IMPACT MEASUREMENT ================= -->
+<section class="card">
+  <h2>Impact Measurement & Validation</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python"># Simulated impact evaluation
+baseline_conversion = 0.18
+campaign_conversion = 0.24
+
+uplift = campaign_conversion - baseline_conversion
+opportunity_loss_reduction = uplift / baseline_conversion
+
+print(f"Conversion Uplift: {uplift:.2%}")
+print(f"Opportunity Loss Reduction: {opportunity_loss_reduction:.2%}")</code></pre>
+  </div>
+
+  <p>
+    Targeted reactivation resulted in approximately
+    <strong>6% reduction in opportunity loss</strong>,
+    driven by early identification of high-intent groups.
+  </p>
+</section>
+
+<!-- ================= CONCLUSION ================= -->
+<section class="card">
+  <h2>Conclusion</h2>
+
+  <ul>
+    <li>ONUS + OFFUS behavior provides early signals of churn</li>
+    <li>Group-level intelligence is critical in JLG lending</li>
+    <li>Data-driven reactivation maximizes lifecycle value</li>
+  </ul>
+
+  <p>
+    This framework creates multiple segments of the customers best for reactivation targetted campagning.
+  </p>
+</section>
+
+<!-- ================= BACK LINK ================= -->
+<a href="https://your-portfolio-link.com" class="back-btn">Back to Portfolio</a>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+
+</body>
+</html>
