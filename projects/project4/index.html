@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multibureau Strategy Development</title>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+<!-- PrismJS -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header>
+  <div class="header-container">
+    <h1>Multibureau Strategy Development</h1>
+    <p class="subtitle">Rule-Based Credit Bureau Optimization | SAS Implementation</p>
+  </div>
+  <div class="header-decor"></div>
+</header>
+
+<main>
+
+<!-- Business Problem -->
+<section class="card">
+  <h2>Business Problem</h2>
+  <p>
+Credit loss was increasing for Micro Enterprise Loan (MEL) and Personal Loan (PL) products. Even tough customers were looking clean in CRIF bureau records they were defaulting after getting  the loan. Therefore, it became very important to validate the bureau data and also see if any additional detailed can be brought from other credit bureaus.
+  </p>
+</section>
+  
+<!-- Project Overview -->
+<section class="card">
+  <h2>Project Overview</h2>
+  <p>
+    This project demonstrates a <strong>rule-based multibureau credit strategy</strong>
+    for MEL, PL, and HL loans using CIBIL, CRIF, and Equifax data.
+    The goal is to improve bureau hit rate, strengthen delinquency detection,
+    and reduce DPD 180+ credit losses.
+  </p>
+</section>
+
+<!-- Project Architecture -->
+<section class="card">
+  <h2>Project Architecture</h2>
+  <ol>
+    <li>Loan data extraction</li>
+    <li>Data cleaning & standardization</li>
+    <li>DPD derivation (9-month window)</li>
+    <li>Individual bureau profiling</li>
+    <li>Double & triple bureau analysis</li>
+    <li>Sequential bureau decision logic</li>
+    <li>Credit loss simulation</li>
+  </ol>
+</section>
+  
+  <section class="card">
+  <h2>Data Extraction</h2>
+  <h3>MEL, PL and HL Disbursals</h3>
+  <p>
+    Extract all disbursed MEL, PL, and HL loans between July 2021 and December 2021
+    along with customer identifiers and bureau hit flags.
+  </p>
+
+  <div class="code-box">
+    <span class="lang-tag">SAS</span>
+    <pre><code class="language-sas">
+proc sql;
+  create table loan_customer_base as
+  select
+      loan_id,
+      customer_id,
+      loan_type,
+      disbursal_date,
+      loan_amount,
+      tenure_months,
+      cibil_hit,
+      crif_hit,
+      equifax_hit
+  from s3.loan_application
+  where loan_type in ('MEL','PL','HL')
+    and disbursal_date between '01JUL2021'd and '31DEC2021'd;
+quit;
+
+/* Volume check */
+proc freq data=loan_customer_base;
+  tables loan_type;
+run;
+    </code></pre>
+  </div>
+  
+  <h3>Performance Data Extraction</h3>
+  <p>
+    Join performance data and derive customer-level delinquency flags
+    for multiple DPD ranges across 9 months.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table loan_perf_9m as
+  select
+      a.loan_id,
+      a.customer_id,
+      max(b.dpd) as max_dpd_9m
+  from loan_customer_base a
+  left join s3.performance b
+    on a.loan_id = b.loan_id
+   and b.month_no between 1 and 9
+  group by a.loan_id, a.customer_id;
+quit;
+
+data loan_perf_bucket;
+  set loan_perf_9m;
+
+  dpd_0_9m        = (max_dpd_9m = 0);
+  dpd_1_30_9m     = (1  <= max_dpd_9m <= 30);
+  dpd_31_60_9m    = (31 <= max_dpd_9m <= 60);
+  dpd_61_90_9m    = (61 <= max_dpd_9m <= 90);
+  dpd_90_180_9m   = (91 <= max_dpd_9m <= 180);
+  dpd_180plus_9m  = (max_dpd_9m > 180);
+run;
+    </code></pre>
+  </div>
+
+  <h3>Customer-Level Dump (All Loan Types)</h3>
+  <p>
+    Create a consolidated customer-level table capturing
+    loan exposure and delinquency across MEL, PL, and HL.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table customer_level_dump as
+  select
+      a.customer_id,
+      a.loan_type,
+      a.loan_id,
+      a.loan_amount,
+      b.max_dpd_9m,
+      b.dpd_180plus_9m
+  from loan_customer_base a
+  left join loan_perf_bucket b
+    on a.loan_id = b.loan_id;
+quit;
+
+/* Customer exposure validation */
+proc sql;
+  select customer_id, count(distinct loan_type) as product_count
+  from customer_level_dump
+  group by customer_id;
+quit;
+    </code></pre>
+  </div>
+    <h3>CRIF Bureau Extraction & DPD String Appending</h3>
+  <p>
+    Extract CRIF bureau data at the time of application and
+    append raw DPD history string to customer dump.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table crif_raw as
+  select
+      customer_id,
+      dpd_string as crif_dpd_string
+  from s3.crif_bureau
+  where enquiry_date between '01JUL2021'd and '31DEC2021'd;
+quit;
+
+proc sql;
+  create table customer_crif as
+  select a.*, b.crif_dpd_string
+  from customer_level_dump a
+  left join crif_raw b
+    on a.customer_id = b.customer_id;
+quit;
+    </code></pre>
+  </div>
+    
+<h3>CIBIL Bureau Extraction & DPD String Appending</h3>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table cibil_raw as
+  select
+      customer_id,
+      dpd_string as cibil_dpd_string
+  from s3.cibil_bureau
+  where enquiry_date between '01JUL2021'd and '31DEC2021'd;
+quit;
+
+proc sql;
+  create table customer_cibil as
+  select a.*, b.cibil_dpd_string
+  from customer_crif a
+  left join cibil_raw b
+    on a.customer_id = b.customer_id;
+quit;
+    </code></pre>
+  </div>
+
+  <h3>Equifax Bureau Extraction & DPD String Appending</h3>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table equifax_raw as
+  select
+      customer_id,
+      dpd_string as equifax_dpd_string
+  from s3.equifax_bureau
+  where enquiry_date between '01JUL2021'd and '31DEC2021'd;
+quit;
+
+proc sql;
+  create table customer_bureau_dump as
+  select a.*, b.equifax_dpd_string
+  from customer_cibil a
+  left join equifax_raw b
+    on a.customer_id = b.customer_id;
+quit;
+    </code></pre>
+  </div>
+</section>
+  
+  <section class="card">
+  <h2>Variable Creation and DPD Parsing</h2>
+  <p>
+    Parse DPD strings from CRIF, CIBIL, and Equifax
+    to derive maximum historical delinquency.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+data bureau_dpd_parsed;
+  set customer_bureau_dump;
+
+  crif_max_dpd     = max(of input(scan(crif_dpd_string, i, '|'), best.));
+  cibil_max_dpd    = max(of input(scan(cibil_dpd_string, i, '|'), best.));
+  equifax_max_dpd  = max(of input(scan(equifax_dpd_string, i, '|'), best.));
+run;
+    </code></pre>
+  </div>
+
+<h3>Bureau-Level DPD Bucketing</h3>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+data bureau_dpd_bucket;
+  set bureau_dpd_parsed;
+
+  crif_90plus     = (crif_max_dpd >= 90);
+  cibil_90plus    = (cibil_max_dpd >= 90);
+  equifax_90plus  = (equifax_max_dpd >= 90);
+
+  crif_180plus     = (crif_max_dpd >= 180);
+  cibil_180plus    = (cibil_max_dpd >= 180);
+  equifax_180plus  = (equifax_max_dpd >= 180);
+run;
+    </code></pre>
+  </div>
+</section>
+  
+  <section class="card">
+  <h2>Individual Bureau Hit Rate</h2>
+  <p>
+    Calculate hit rate for each bureau independently.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table bureau_hit_rate as
+  select
+      sum(crif_max_dpd >= 0) / count(*) as crif_hit_rate,
+      sum(cibil_max_dpd >= 0) / count(*) as cibil_hit_rate,
+      sum(equifax_max_dpd >= 0) / count(*) as equifax_hit_rate
+  from bureau_dpd_bucket;
+quit;
+    </code></pre>
+  </div>
+</section>
+  
+<section class="card">
+  <h2>Delinquency 90+ Ever per Bureau</h2>
+  <p>
+    Count customers with max DPD >= 90 in each bureau.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table bureau_delinquency_90plus as
+  select
+      sum(crif_90plus) as crif_90plus_count,
+      sum(cibil_90plus) as cibil_90plus_count,
+      sum(equifax_90plus) as equifax_90plus_count
+  from bureau_dpd_bucket;
+quit;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Two-Bureau Combined Hit Rate</h2>
+  <p>
+    Compute hit rate for combinations: CRIF+CIBIL, CRIF+Equifax, CIBIL+Equifax
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+data double_bureau_hits;
+  set bureau_dpd_bucket;
+
+  hit_crif_cibil     = max(crif_max_dpd, cibil_max_dpd) >= 0;
+  hit_crif_equifax   = max(crif_max_dpd, equifax_max_dpd) >= 0;
+  hit_cibil_equifax  = max(cibil_max_dpd, equifax_max_dpd) >= 0;
+run;
+
+proc sql;
+  create table double_bureau_hit_rate as
+  select
+      sum(hit_crif_cibil)/count(*) as crif_cibil_hit_rate,
+      sum(hit_crif_equifax)/count(*) as crif_equifax_hit_rate,
+      sum(hit_cibil_equifax)/count(*) as cibil_equifax_hit_rate
+  from double_bureau_hits;
+quit;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Two-Bureau Delinquency 90+ Ever</h2>
+  <p>
+    Determine customers with 90+ delinquency when combining 2 bureaus.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+data double_bureau_90plus;
+  set bureau_dpd_bucket;
+
+  dpd90_crif_cibil     = max(crif_90plus, cibil_90plus);
+  dpd90_crif_equifax   = max(crif_90plus, equifax_90plus);
+  dpd90_cibil_equifax  = max(cibil_90plus, equifax_90plus);
+run;
+
+proc sql;
+  create table double_bureau_90plus_count as
+  select
+      sum(dpd90_crif_cibil) as crif_cibil_90plus,
+      sum(dpd90_crif_equifax) as crif_equifax_90plus,
+      sum(dpd90_cibil_equifax) as cibil_equifax_90plus
+  from double_bureau_90plus;
+quit;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Triple Bureau Hit Rate</h2>
+  <p>
+    Evaluate hit rate when using all three bureaus together.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+data triple_bureau_hit;
+  set bureau_dpd_bucket;
+  triple_hit = max(crif_max_dpd, cibil_max_dpd, equifax_max_dpd) >= 0;
+run;
+
+proc sql;
+  create table triple_bureau_hit_rate as
+  select sum(triple_hit)/count(*) as triple_hit_rate
+  from triple_bureau_hit;
+quit;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Triple Bureau Delinquency 90+ Ever</h2>
+  <p>
+    Count customers with 90+ DPD using all 3 bureaus.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+data triple_bureau_90plus;
+  set bureau_dpd_bucket;
+  triple_90plus = max(crif_90plus, cibil_90plus, equifax_90plus);
+run;
+
+proc sql;
+  create table triple_bureau_90plus_count as
+  select sum(triple_90plus) as triple_90plus_count
+  from triple_bureau_90plus;
+quit;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>DPD 180+ Ever Flag per Customer</h2>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table dpd180_flags as
+  select customer_id,
+         crif_180plus,
+         cibil_180plus,
+         equifax_180plus
+  from bureau_dpd_bucket;
+quit;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Rejection Cases Using CRIF Only</h2>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  select sum(crif_180plus) as rejected_crif_only
+  from dpd180_flags;
+quit;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Rejection Cases Using Double Bureaus</h2>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+data dpd180_double;
+  set dpd180_flags;
+
+  reject_crif_cibil     = max(crif_180plus, cibil_180plus);
+  reject_crif_equifax   = max(crif_180plus, equifax_180plus);
+  reject_cibil_equifax  = max(cibil_180plus, equifax_180plus);
+run;
+
+proc sql;
+  select
+      sum(reject_crif_cibil) as reject_crif_cibil,
+      sum(reject_crif_equifax) as reject_crif_equifax,
+      sum(reject_cibil_equifax) as reject_cibil_equifax
+  from dpd180_double;
+quit;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Rejection Cases Using All 3 Bureaus</h2>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+data dpd180_triple;
+  set dpd180_flags;
+  reject_all_three = max(crif_180plus, cibil_180plus, equifax_180plus);
+run;
+
+proc sql;
+  select sum(reject_all_three) as reject_all_three_count
+  from dpd180_triple;
+quit;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Current Credit Loss</h2>
+  <p>
+    Calculate the total number of customers who actually defaulted (DPD 180+)
+    without any bureau optimization.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table current_credit_loss as
+  select sum(dpd_180plus_9m) as total_current_loss
+  from loan_perf_bucket;
+quit;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Loss Savings with 2-Bureau Policy</h2>
+  <p>
+    Calculate potential reduction in DPD 180+ cases if a two-bureau policy
+    was applied.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table loss_saving_double as
+  select
+      sum(dpd_180plus_9m * hit_crif_cibil) as loss_crif_cibil,
+      sum(dpd_180plus_9m * hit_crif_equifax) as loss_crif_equifax,
+      sum(dpd_180plus_9m * hit_cibil_equifax) as loss_cibil_equifax
+  from double_bureau_hits;
+
+data loss_saving_double_summary;
+  set loss_saving_double;
+  loss_reduction_crif_cibil   = total_current_loss - loss_crif_cibil;
+  loss_reduction_crif_equifax = total_current_loss - loss_crif_equifax;
+  loss_reduction_cibil_equifax = total_current_loss - loss_cibil_equifax;
+run;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Loss Savings with 3-Bureau Policy</h2>
+  <p>
+    Calculate potential reduction in DPD 180+ cases if all three bureaus
+    were considered together.
+  </p>
+
+  <div class="code-box">
+    <pre><code class="language-sas">
+proc sql;
+  create table loss_saving_triple as
+  select sum(dpd_180plus_9m * triple_hit) as optimized_loss_3bureaus
+  from triple_bureau_hit;
+
+data loss_saving_triple_summary;
+  set loss_saving_triple;
+  loss_reduction_3bureaus = total_current_loss - optimized_loss_3bureaus;
+run;
+    </code></pre>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Conclusion</h2>
+  <p>Using single bureau information was leankingsome 180+ DPD customers. Some bureau has better Hit-Rate information while others has
+  better delinquency level infomation. It is in banks favour to hit the bureau with higher 
+    delinquency level information first and if not hit in first then case will be forwarded to second bereau. 
+    This way bank will be able to get highest possible delinquency filtering while minimizing the bureau hit cost.</p>
+</section>
+  
+<!-- Back to Portfolio -->
+<a href="https://rupesh-bawane-work.github.io/profile/#projects" class="back-btn">Back to Portfolio</a>
+
+</main>
+
+<!-- PrismJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sas.min.js"></script>
+
+</body>
+</html>
