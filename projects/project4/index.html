@@ -101,6 +101,7 @@ run;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table loan_perf_9m as
@@ -135,6 +136,7 @@ run;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table customer_level_dump as
@@ -165,6 +167,7 @@ quit;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table crif_raw as
@@ -188,6 +191,7 @@ quit;
 <h3>CIBIL Bureau Extraction & DPD String Appending</h3>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table cibil_raw as
@@ -211,6 +215,7 @@ quit;
   <h3>Equifax Bureau Extraction & DPD String Appending</h3>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table equifax_raw as
@@ -240,6 +245,7 @@ quit;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 data bureau_dpd_parsed;
   set customer_bureau_dump;
@@ -254,6 +260,7 @@ run;
 <h3>Bureau-Level DPD Bucketing</h3>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 data bureau_dpd_bucket;
   set bureau_dpd_parsed;
@@ -277,6 +284,7 @@ run;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table bureau_hit_rate as
@@ -297,6 +305,7 @@ quit;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table bureau_delinquency_90plus as
@@ -317,6 +326,7 @@ quit;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 data double_bureau_hits;
   set bureau_dpd_bucket;
@@ -345,6 +355,7 @@ quit;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 data double_bureau_90plus;
   set bureau_dpd_bucket;
@@ -373,6 +384,7 @@ quit;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 data triple_bureau_hit;
   set bureau_dpd_bucket;
@@ -395,6 +407,7 @@ quit;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 data triple_bureau_90plus;
   set bureau_dpd_bucket;
@@ -414,6 +427,7 @@ quit;
   <h2>DPD 180+ Ever Flag per Customer</h2>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table dpd180_flags as
@@ -431,6 +445,7 @@ quit;
   <h2>Rejection Cases Using CRIF Only</h2>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   select sum(crif_180plus) as rejected_crif_only
@@ -444,6 +459,7 @@ quit;
   <h2>Rejection Cases Using Double Bureaus</h2>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 data dpd180_double;
   set dpd180_flags;
@@ -468,6 +484,7 @@ quit;
   <h2>Rejection Cases Using All 3 Bureaus</h2>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 data dpd180_triple;
   set dpd180_flags;
@@ -490,6 +507,7 @@ quit;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table current_credit_loss as
@@ -508,6 +526,7 @@ quit;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table loss_saving_double as
@@ -535,6 +554,7 @@ run;
   </p>
 
   <div class="code-box">
+    <span class="lang-tag">SAS</span>
     <pre><code class="language-sas">
 proc sql;
   create table loss_saving_triple as
