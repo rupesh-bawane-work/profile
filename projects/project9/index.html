@@ -15,7 +15,7 @@
 <header>
   <div class="header-container">
     <h1>Social Network Analysis</h1>
-    <p class="subtitle">Community Detection • Influence Analysis • Network Visualization</p>
+    <p class="subtitle">Community Detection • Influence Analysis • Structural Roles</p>
   </div>
   <div class="header-decor"></div>
 </header>
@@ -26,10 +26,10 @@
 <section class="card">
   <h2>Business Problem</h2>
   <p>
-    Large-scale social networks contain hidden structures such as communities,
-    influential users, and bridge connectors. Traditional analysis fails to
-    uncover influence concentration, information flow paths, and segmentation
-    opportunities, limiting data-driven decision making.
+    Large social networks hide complex structures such as communities,
+    influential users, and bridge connectors. Identifying influence,
+    segmentation, and information flow paths is critical for marketing,
+    recommendation systems, and platform governance.
   </p>
 </section>
 
@@ -37,92 +37,180 @@
 <section class="card">
   <h2>Project Overview</h2>
   <p>
-    This project applies graph-based network analysis using Python and NetworkX
-    to identify community structures, influential nodes, and bridge connectors
-    in a social network. The analysis supports influence maximization,
-    segmentation, and network resilience assessment.
+    This project performs end-to-end social network analysis using Python,
+    NetworkX, and Matplotlib. The workflow includes graph construction,
+    feature enrichment, community detection, centrality analysis,
+    visualization, and influence assessment.
   </p>
 </section>
 
-<!-- ================= DATA REQUIREMENTS ================= -->
+<!-- ================= LIBRARIES ================= -->
 <section class="card">
-  <h2>Data Requirements</h2>
-  <ul>
-    <li>Edge list files (node-to-node relationships)</li>
-    <li>Community circle definitions</li>
-    <li>Node-level feature files</li>
-    <li>Ego-network attributes</li>
-  </ul>
-</section>
-
-<!-- ================= GRAPH CONSTRUCTION ================= -->
-<section class="card">
-  <h2>Graph Construction</h2>
+  <h2>Library Setup</h2>
 
   <div class="code-box">
     <span class="lang-tag">Python</span>
-<pre><code class="language-python">import pandas as pd
+<pre><code class="language-python">import os
+import pandas as pd
 import networkx as nx
-
-# Load edge list
-edges = pd.read_csv(
-    "facebook_combined.txt",
-    sep=" ",
-    header=None,
-    names=["node_1", "node_2"]
-)
-
-# Create graph
-G = nx.Graph()
-G.add_edges_from(edges.values)
-
-G.number_of_nodes(), G.number_of_edges()</code></pre>
+import matplotlib.pyplot as plt
+import numpy as np
+from collections import Counter, defaultdict
+from networkx.algorithms import community</code></pre>
   </div>
 </section>
 
-<!-- ================= NETWORK ENRICHMENT ================= -->
+<!-- ================= BASIC NETWORK LOAD ================= -->
 <section class="card">
-  <h2>Network Enrichment</h2>
-
-  <p>
-    Community labels and node attributes were added to enrich the graph
-    for deeper structural analysis.
-  </p>
+  <h2>Basic Network Construction</h2>
 
   <div class="code-box">
     <span class="lang-tag">Python</span>
-<pre><code class="language-python"># Assign community labels
-for i, community in enumerate(circles):
-    for node in community:
-        if node not in G:
-            G.add_node(node)
+<pre><code class="language-python">edges = []
+
+with open("facebook_combined.txt", "r") as file:
+    for line in file:
+        nodes = line.strip().split()
+        if len(nodes) == 2:
+            edges.append((int(nodes[0]), int(nodes[1])))
+
+G = nx.Graph()
+G.add_edges_from(edges)
+
+plt.figure(figsize=(8, 6))
+nx.draw(G, with_labels=False, node_size=30,
+        node_color='skyblue', edge_color='gray')
+plt.title("Network Plot")
+plt.savefig("network_plot.png")
+plt.show()</code></pre>
+  </div>
+</section>
+
+<!-- ================= FILE CATEGORIZATION ================= -->
+<section class="card">
+  <h2>File Categorization</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">directory = "network"
+
+def categorize_files(directory):
+    file_types = {
+        "CIRCLES": [], "EDGES": [], "EGOFEAT": [],
+        "FEAT": [], "FEATNAMES": [], "TXT": []
+    }
+    for file in os.listdir(directory):
+        lower = file.lower()
+        path = os.path.join(directory, file)
+        if os.path.isdir(path):
+            continue
+        elif file.endswith(".txt") and "edge-nodes" in lower:
+            file_types["TXT"].append(file)
+        elif "circle" in lower:
+            file_types["CIRCLES"].append(file)
+        elif "edge" in lower:
+            file_types["EDGES"].append(file)
+        elif "egofeat" in lower:
+            file_types["EGOFEAT"].append(file)
+        elif "featnames" in lower:
+            file_types["FEATNAMES"].append(file)
+        elif "feat" in lower:
+            file_types["FEAT"].append(file)
+    return file_types
+
+files_by_type = categorize_files(directory)</code></pre>
+  </div>
+</section>
+
+<!-- ================= LOAD DATA ================= -->
+<section class="card">
+  <h2>Load Network Data</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">def load_edges(file_list):
+    edges = []
+    for file in file_list:
+        df = pd.read_csv(os.path.join(directory, file), header=None)
+        for row in df.itertuples(index=False):
+            if len(row) >= 2:
+                edges.append((row[0], row[1]))
+    return edges
+
+def load_circles(file_list):
+    circles = []
+    for file in file_list:
+        df = pd.read_csv(os.path.join(directory, file), header=None)
+        for row in df.itertuples(index=False):
+            for circle_str in row:
+                parts = str(circle_str).split("\t")
+                if len(parts) > 1:
+                    circles.append(parts[1:])
+    return circles
+
+def load_features(file_list):
+    features = {}
+    for file in file_list:
+        df = pd.read_csv(os.path.join(directory, file), header=None)
+        for row in df.itertuples(index=False):
+            parts = str(row[0]).split()
+            if len(parts) > 1:
+                features[parts[0]] = [int(f) for f in parts[1:]]
+    return features
+
+def load_featnames(file_list):
+    featnames = []
+    for file in file_list:
+        df = pd.read_csv(os.path.join(directory, file), header=None)
+        for row in df.itertuples(index=False):
+            featnames.append(str(row[0]))
+    return featnames</code></pre>
+  </div>
+</section>
+
+<!-- ================= BUILD GRAPH ================= -->
+<section class="card">
+  <h2>Graph Assembly</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">edges = load_edges(files_by_type["EDGES"]) + load_edges(files_by_type["TXT"])
+circles = load_circles(files_by_type["CIRCLES"])
+node_features = load_features(files_by_type["FEAT"])
+ego_features = load_features(files_by_type["EGOFEAT"])
+featnames = load_featnames(files_by_type["FEATNAMES"])
+
+G = nx.Graph()
+G.add_edges_from(edges)
+
+for node in node_features:
+    if node not in G:
+        G.add_node(node)
+
+for i, community_nodes in enumerate(circles):
+    for node in community_nodes:
         G.nodes[node]["community"] = i</code></pre>
   </div>
 </section>
 
-<!-- ================= NETWORK METRICS ================= -->
+<!-- ================= CENTRALITY ================= -->
 <section class="card">
-  <h2>Network Metrics & Centrality</h2>
-
-  <p>
-    Centrality measures were used to identify influential, central,
-    and structurally important nodes.
-  </p>
+  <h2>Centrality Analysis</h2>
 
   <div class="code-box">
     <span class="lang-tag">Python</span>
-<pre><code class="language-python"># Centrality metrics
-deg_cent = nx.degree_centrality(G)
+<pre><code class="language-python">deg_cent = nx.degree_centrality(G)
 bet_cent = nx.betweenness_centrality(G)
 close_cent = nx.closeness_centrality(G)
-eig_cent = nx.eigenvector_centrality(G, max_iter=500)
 
-# Top influential nodes
-top_influential = sorted(
-    deg_cent.items(),
-    key=lambda x: x[1],
-    reverse=True
-)[:10]</code></pre>
+try:
+    eig_cent = nx.eigenvector_centrality(G, max_iter=500)
+except:
+    eig_cent = {}
+
+print("Top Degree:", sorted(deg_cent.items(), key=lambda x: x[1], reverse=True)[:10])
+print("Top Betweenness:", sorted(bet_cent.items(), key=lambda x: x[1], reverse=True)[:10])
+print("Top Closeness:", sorted(close_cent.items(), key=lambda x: x[1], reverse=True)[:10])</code></pre>
   </div>
 </section>
 
@@ -130,24 +218,18 @@ top_influential = sorted(
 <section class="card">
   <h2>Bridge Node Detection</h2>
 
-  <p>
-    Bridge nodes connect multiple communities and play a critical role
-    in information diffusion and influence spread.
-  </p>
-
   <div class="code-box">
     <span class="lang-tag">Python</span>
 <pre><code class="language-python">bridge_nodes = []
 
 for node in G.nodes():
-    neighbor_communities = {
-        G.nodes[n].get("community", -1)
-        for n in G.neighbors(node)
-    }
-    if len(neighbor_communities) > 1:
-        bridge_nodes.append(node)
+    communities = set(G.nodes[n].get("community", -1)
+                      for n in G.neighbors(node))
+    if len(communities) > 1:
+        bridge_nodes.append((node, bet_cent[node]))
 
-len(bridge_nodes)</code></pre>
+bridge_nodes = sorted(bridge_nodes, key=lambda x: x[1], reverse=True)
+bridge_nodes[:10]</code></pre>
   </div>
 </section>
 
@@ -157,18 +239,29 @@ len(bridge_nodes)</code></pre>
 
   <div class="code-box">
     <span class="lang-tag">Python</span>
-<pre><code class="language-python">from networkx.algorithms import community
+<pre><code class="language-python">clusters = list(community.greedy_modularity_communities(G))
+print("Number of communities:", len(clusters))
 
-communities = list(
-    community.greedy_modularity_communities(G)
-)
+for i, c in enumerate(clusters[:5]):
+    print(f"Community {i+1} size:", len(c))</code></pre>
+  </div>
+</section>
 
-community_sizes = {
-    i: len(c)
-    for i, c in enumerate(communities)
-}
+<!-- ================= NETWORK STATISTICS ================= -->
+<section class="card">
+  <h2>Network Statistics</h2>
 
-community_sizes</code></pre>
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">num_nodes = G.number_of_nodes()
+num_edges = G.number_of_edges()
+avg_degree = sum(dict(G.degree()).values()) / num_nodes
+density = nx.density(G)
+
+print("Nodes:", num_nodes)
+print("Edges:", num_edges)
+print("Average Degree:", avg_degree)
+print("Density:", density)</code></pre>
   </div>
 </section>
 
@@ -178,70 +271,27 @@ community_sizes</code></pre>
 
   <div class="code-box">
     <span class="lang-tag">Python</span>
-<pre><code class="language-python">import matplotlib.pyplot as plt
-
-pos = nx.spring_layout(G, seed=42)
+<pre><code class="language-python">pos = nx.spring_layout(G, seed=42)
 node_colors = [G.nodes[n].get("community", 0) for n in G.nodes()]
 
-plt.figure(figsize=(12, 10))
-nx.draw(
-    G,
-    pos,
-    node_color=node_colors,
-    cmap=plt.cm.tab20,
-    node_size=200,
-    edge_color="gray",
-    alpha=0.6
-)
-plt.title("Network Communities & Structure")
+plt.figure(figsize=(14, 12))
+nx.draw_networkx_nodes(G, pos, node_color=node_colors,
+                       cmap=plt.cm.tab20, node_size=200)
+nx.draw_networkx_edges(G, pos, alpha=0.4)
+plt.title("Network Communities")
 plt.axis("off")
 plt.show()</code></pre>
   </div>
 </section>
 
-<!-- ================= NETWORK HEALTH ================= -->
-<section class="card">
-  <h2>Network Health & Structure</h2>
-
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">density = nx.density(G)
-components = list(nx.connected_components(G))
-
-largest_component_size = len(
-    max(components, key=len)
-)
-
-density, len(components), largest_component_size</code></pre>
-  </div>
-</section>
-
-<!-- ================= BUSINESS IMPACT ================= -->
-<section class="card">
-  <h2>Business Impact</h2>
-
-  <ul>
-    <li>Identified high-influence users for targeted campaigns</li>
-    <li>Detected bridge nodes critical for information diffusion</li>
-    <li>Enabled community-based market segmentation</li>
-    <li>Improved understanding of network resilience and fragmentation</li>
-  </ul>
-
-  <p>
-    The network insights support data-driven decisions for marketing,
-    recommendation systems, and social platform optimization.
-  </p>
-</section>
-
 <!-- ================= CONCLUSION ================= -->
 <section class="card">
   <h2>Conclusion</h2>
-
   <p>
-    This project demonstrates how graph theory and network analytics
-    can uncover hidden patterns in complex social systems. By combining
-    community detection, centrality analysis, and visualization, the
-    project delivers actionable insights for influence and segmentation.
+    This project demonstrates advanced network analysis techniques to uncover
+    community structures, influential users, and bridge nodes. The insights
+    can be applied to marketing, social media analytics, recommendation systems,
+    and information diffusion modeling.
   </p>
 </section>
 
