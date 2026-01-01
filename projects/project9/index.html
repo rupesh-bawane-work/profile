@@ -24,15 +24,63 @@
     <section class="card">
         <h2>Project Overview</h2>
         <p>This project examines whether influencers within a Facebook community network also function as central nodes. It analyzes various network structures and investigates how different communities interact with one another.</p>
-
-        <!-- Screenshot Placeholder -->
-        <img src="sales_dashboard.png" alt="Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;" alt="Power BI Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;"/>
     </section>
-
-    <!-- Business Insights -->
     <section class="card">
-        <h2>Key Insights</h2>
-        <p>The dashboard highlights top-performing states, sales growth trends, and underperforming products. By integrating sales, customer, and product data, it helps teams quickly identify opportunities and areas requiring intervention.</p>
+  <h2>Data Requirement</h2>
+
+  <ul>
+    <li>Facebook Network Graph</li>
+    <li>Facebook Cirlces</li>
+    <li>Facebook Edge</li>
+    <li>Facebook Ego</li>
+    <li>Facebook Egofeat</li>
+    <li>Facebook Feat</li>
+    <li>Facebook Featnames</li>
+  </ul>
+</section>
+
+    <section class="card">
+  <h2>Tracking Dataset Assembly</h2>
+
+  <div class="code-box">
+    <span class="lang-tag">Python</span>
+<pre><code class="language-python">
+    !pip install networkx matplotlib
+    import networkx as nx
+import matplotlib.pyplot as plt
+
+# Step 1: Read the .txt file containing pairs of nodes
+edges = []
+
+# Read the file and extract pairs of nodes
+with open("/content/network/facebook_combined.txt", "r") as file:
+    for line in file:
+        # Split each line into two nodes and append as a tuple
+        nodes = line.strip().split()  # Remove leading/trailing whitespace and split by space
+        if len(nodes) == 2:  # Ensure each line contains exactly two elements
+            edges.append((int(nodes[0]), int(nodes[1])))  # Convert to integers and append
+
+# Step 2: Create a graph from the edges
+G = nx.Graph()  # Use nx.DiGraph() if the network is directed
+
+# Add edges to the graph
+G.add_edges_from(edges)
+
+# Step 3: Plot the network
+plt.figure(figsize=(8, 6))  # Optional: set figure size
+nx.draw(G, with_labels=False, node_size=30, node_color='skyblue', edge_color='gray')
+plt.title("Network Plot")
+
+# Save the figure
+plt.savefig("network_plot.png")  # You can change the file name and format (e.g., .jpg, .pdf)
+
+# Show the plot
+plt.show()
+
+</code></pre>
+  </div>
+        <!-- Screenshot Placeholder -->
+        <img src="network_plot.png" alt="Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;" alt="Power BI Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;"/>
     </section>
 
     <!-- Conclusion -->
@@ -44,6 +92,9 @@
     <!-- Back Button -->
     <a href="https://rupesh-bawane-work.github.io/profile/#projects" class="back-btn">Back to Portfolio</a>
 </main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
 
 </body>
 </html>
