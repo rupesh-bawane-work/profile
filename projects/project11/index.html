@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Micro Enterprise Loan Tracking</title>
+<title>G20 Sovereign CDS Connectedness Analysis</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
@@ -14,564 +14,149 @@
 
 <header>
   <div class="header-container">
-    <h1>Micro Enterprise Loan Tracking</h1>
-    <p class="subtitle">Loan Journey Monitoring • Early Risk Indicators • Portfolio Governance</p>
+    <h1>G20 Sovereign CDS Connectedness Analysis</h1>
+    <p class="subtitle">TVP-VAR Modeling • Volatility Spillovers • Risk Determinant Analysis</p>
   </div>
   <div class="header-decor"></div>
 </header>
 
 <main>
 
-<!-- ================= BUSINESS PROBLEM ================= -->
 <section class="card">
   <h2>Business Problem</h2>
-
-<p>Micro Enterprise Loan (MEL) portfolio requires close monitoring across the loan lifecycle to identify early risk indicators, reduce delays, and enhance operational efficiency. Traditional reporting often misses stage-wise bottlenecks, making proactive intervention difficult. The business challenge is to track each stage of the loan journey and provide actionable insights to improve portfolio performance.</p>
-
+  <p>Financial contagion among G20 nations can lead to systemic collapses. Traditional risk models often fail to capture the <strong>dynamic, time-varying nature</strong> of how sovereign credit risk spreads. The challenge is to quantify these spillovers and identify which countries act as the primary transmitters of financial instability during global crises.</p>
 </section>
 
-<!-- ================= PROJECT OVERVIEW ================= -->
 <section class="card">
   <h2>Project Overview</h2>
-
-<p>This project implements end-to-end tracking of the Micro Enterprise Loan (MEL) lifecycle, from application submission to disbursal. It includes stage-wise monitoring, early risk detection, and model parameter monitoring. The insights help the operations and risk teams to proactively act and improve portfolio quality.</p>
-
+  <p>This project implements a comprehensive TVP-VAR Extended Joint Connectedness framework to analyze sovereign CDS returns. It spans the entire analytical pipeline: from data stationarity testing and growth rate visualization to time-varying spillover estimation and robust regression analysis of risk determinants.</p>
 </section>
 
-<!-- ================= LOAN JOURNEY ================= -->
 <section class="card">
-  <h2>MEL Loan Lifecycle Definition</h2>
-
+  <h2>Analysis Lifecycle Definition</h2>
   <ul>
-    <li><strong>Stage 1:</strong> Application & Credit Assessment</li>
-    <li><strong>Stage 2:</strong> Approval & Disbursement</li>
-    <li><strong>Stage 3:</strong> First EMI & Early Repayment</li>
-    <li><strong>Stage 4:</strong> Ongoing Performance Monitoring</li>
-    <li><strong>Stage 5:</strong> Risk Escalation & Intervention</li>
+    <li><strong>Stage 1:</strong> Data Transformation & Stationarity (Log Returns)</li>
+    <li><strong>Stage 2:</strong> Descriptive Statistics & Unit Root Testing (Table 1)</li>
+    <li><strong>Stage 3:</strong> TVP-VAR Connectedness Estimation (Table 2)</li>
+    <li><strong>Stage 4:</strong> Dynamic Spillovers & Net Position Analysis (Figs 2, 3, 4)</li>
+    <li><strong>Stage 5:</strong> Determinant Analysis (HAC & Quantile Regressions - Tables 4, 5)</li>
+    <li><strong>Stage 6:</strong> Granular Directional Analysis (Appendix A1, A2)</li>
   </ul>
 </section>
 
-<!-- ================= PROJECT ARCHITECTURE ================= -->
-<section class="card">
-  <h2>Project Architecture</h2>
-
-  <ul>
-    <li>Loan Journey Mapping</li>
-    <li>Stage-wise KPI Definition</li>
-    <li>Early Risk Indicator Design</li>
-    <li>Model Parameter Monitoring</li>
-    <li>Threshold & Alert Framework</li>
-    <li>Operational Feedback Loop</li>
-  </ul>
-</section>
-
-<!-- ================= DATA REQUIREMENT ================= -->
 <section class="card">
   <h2>Data Requirement</h2>
-
   <ul>
-    <li>Loan Application Data</li>
-    <li>Credit Scorecard Outputs</li>
-    <li>Disbursement Records</li>
-    <li>Repayment / DPD History</li>
-    <li>Customer Demographics</li>
-    <li>Branch & Channel Information</li>
+    <li>Sovereign CDS Daily Prices (G20 Nations)</li>
+    <li>Global Uncertainty Indices (VIX, GPR, TPU, CPU)</li>
+    <li>Economic Policy Uncertainty Indicators</li>
+    <li>Historical Crisis Timelines (COVID-19, etc.)</li>
   </ul>
 </section>
 
-<!-- ================= DATA EXTRACTION ================= -->
 <section class="card">
-  <h2>Data Extraction & Base Table Creation</h2>
+  <h2>Data Extraction & Descriptive Statistics</h2>
 
-  <!-- Application Data -->
-  <h3>Step 1: MEL Application Base</h3>
+  <h3>Step 1: CDS Log Returns (Fig 1)</h3>
   <div class="code-box">
-    <span class="lang-tag">SQL</span>
-<pre><code class="language-sql">CREATE TABLE my_lib.mel_applications AS
-SELECT
-    a.application_id,
-    a.customer_id,
-    a.application_date,
-    a.branch_id,
-    a.channel,
-    a.requested_amount,
-    a.tenure,
-    a.credit_score,
-    a.model_decile,
-    a.decision
-FROM s3.loan_application a
-WHERE a.product = 'MEL'
-  AND a.application_date BETWEEN DATE '2023-01-01' AND DATE '2023-12-31';</code></pre>
+    <span class="lang-tag">R</span>
+<pre><code class="language-r"># Convert to 100 * log returns
+cds_returns_mat <- diff(log(as.matrix(cds_raw[,-1]))) * 100
+cds_zoo <- zoo(cds_returns_mat, order.by = cds_dates[-1])
+
+# Fig 1: Visualizing Growth Rates
+ggplot(data_long, aes(x = Index, y = Growth)) +
+  geom_line(color = "steelblue") +
+  facet_wrap(~ Country, nrow = 8, scales = "free_y") +
+  theme_minimal()</code></pre>
   </div>
 
-  <!-- Approved Loans -->
-  <h3>Step 2: Approved & Disbursed Loans</h3>
+  <h3>Step 2: Table 1 (Panel A & B) - Statistical Profiling</h3>
   <div class="code-box">
-    <span class="lang-tag">SQL</span>
-<pre><code class="language-sql">CREATE TABLE my_lib.mel_disbursed_loans AS
-SELECT
-    d.loan_id,
-    d.customer_id,
-    d.disbursement_date,
-    d.disbursed_amount,
-    d.tenure,
-    d.application_id
-FROM s3.loan_disbursement d
-WHERE d.product = 'MEL'
-  AND d.loan_id IS NOT NULL;</code></pre>
-  </div>
+    <span class="lang-tag">R</span>
+<pre><code class="language-r"># Comprehensive Stats: Skewness, Kurtosis, JB, and ERS Tests
+calculate_desc_stats <- function(x) {
+  # ... (Refer to R script for full function logic)
+  c(Mean = mean(x), Variance = var(x), JB = jb_t$p.value, ERS = ers_t@teststat)
+}
 
-  <!-- Application to Disbursement Mapping -->
-  <h3>Step 3: Application-to-Disbursement Funnel</h3>
-  <div class="code-box">
-    <span class="lang-tag">SQL</span>
-<pre><code class="language-sql">CREATE TABLE my_lib.mel_funnel AS
-SELECT
-    a.application_id,
-    a.customer_id,
-    a.application_date,
-    a.credit_score,
-    a.model_decile,
-    a.decision,
-    d.loan_id,
-    d.disbursement_date,
-    d.disbursed_amount
-FROM my_lib.mel_applications a
-LEFT JOIN my_lib.mel_disbursed_loans d
-  ON a.application_id = d.application_id;</code></pre>
+tab1a <- t(apply(cds_returns_mat, 2, calculate_desc_stats))
+tab1b <- t(apply(tci_returns_mat, 2, calculate_desc_stats))</code></pre>
   </div>
-
 </section>
 
-<!-- ================= PERFORMANCE BASE ================= -->
 <section class="card">
-  <h2>Loan Performance Base</h2>
+  <h2>TVP-VAR Connectedness & Spillovers</h2>
 
-  <h3>Repayment & DPD History</h3>
-  <div class="code-box">
-    <span class="lang-tag">SQL</span>
-<pre><code class="language-sql">CREATE TABLE my_lib.mel_loan_performance AS
-SELECT
-    p.loan_id,
-    p.customer_id,
-    p.dpd_string,
-    p.reporting_date
-FROM s3.loan_performance p
-WHERE p.loan_id IN (
-    SELECT loan_id FROM my_lib.mel_disbursed_loans
-);</code></pre>
-  </div>
-
-</section>
-
-<!-- ================= PYTHON BASE ================= -->
-<section class="card">
-  <h2>Tracking Dataset Assembly</h2>
-
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">import pandas as pd
-
-funnel = pd.read_csv("mel_funnel.csv")
-performance = pd.read_csv("mel_loan_performance.csv")
-
-tracking_df = funnel.merge(
-    performance,
-    on=['loan_id','customer_id'],
-    how='left'
-)
-
-tracking_df.shape</code></pre>
-  </div>
-
-</section>
+  <h3>Step 3: Table 2 - Average Joint Connectedness</h3>
   
-  <!-- ===================================================== -->
-<!-- ================= PART 2 START ====================== -->
-<!-- ===================================================== -->
-
-<!-- ================= STAGE-WISE KPI ================= -->
-<section class="card">
-  <h2>Stage-wise Loan Journey KPIs</h2>
-
-  <p>
-    Each stage of the MEL lifecycle was monitored using predefined KPIs
-    to identify friction points and early risk accumulation.
-  </p>
-
-  <ul>
-    <li><strong>Application Stage:</strong> Approval rate, score distribution</li>
-    <li><strong>Disbursement Stage:</strong> Drop-offs, TAT</li>
-    <li><strong>Early Repayment:</strong> EMI-1, EMI-2 behavior</li>
-    <li><strong>Portfolio Stage:</strong> Early delinquency build-up</li>
-  </ul>
-</section>
-
-<!-- ================= APPLICATION STAGE ================= -->
-<section class="card">
-  <h2>Application Stage Monitoring</h2>
-
-  <h3>Approval Rate by Score Decile</h3>
   <div class="code-box">
-    <span class="lang-tag">SQL</span>
-<pre><code class="language-sql">CREATE TABLE my_lib.mel_approval_metrics AS
-SELECT
-    model_decile,
-    COUNT(*) AS total_applications,
-    SUM(CASE WHEN decision = 'APPROVED' THEN 1 ELSE 0 END) AS approved_apps,
-    ROUND(
-        SUM(CASE WHEN decision = 'APPROVED' THEN 1 ELSE 0 END) * 1.0 /
-        COUNT(*),
-        3
-    ) AS approval_rate
-FROM my_lib.mel_applications
-GROUP BY model_decile
-ORDER BY model_decile;</code></pre>
+    <span class="lang-tag">R</span>
+<pre><code class="language-r"># TVP-VAR Extended Joint Connectedness Engine
+res <- ConnectednessApproach(cds_zoo, nlag = 1, nfore = 20, model = "TVP-VAR", 
+                             connectedness = "Extended Joint")
+print(res$TABLE) # Table 2 Output</code></pre>
   </div>
 
-  <h3>Score Drift Monitoring</h3>
+  <h3>Step 4: Figs 2, 3 & 4 - Dynamic TCI & Net Spillovers</h3>
   <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">import pandas as pd
-import numpy as np
+    <span class="lang-tag">R</span>
+<pre><code class="language-r"># Fig 2 & 3: Total Connectedness Index (TCI)
+p2 <- create_tci_plot(tci_df, "Full Period TCI", "2010-01-01", "2023-12-31")
 
-apps = pd.read_csv("mel_applications.csv")
-
-apps['application_month'] = pd.to_datetime(
-    apps['application_date']
-).dt.to_period('M')
-
-score_drift = apps.groupby(
-    ['application_month','model_decile']
-).size().unstack(fill_value=0)
-
-score_drift.head()</code></pre>
+# Fig 4: Net Total Directional Connectedness
+ggplot(net_long, aes(x = Date, y = Net)) +
+  stat_difference(aes(ymin = 0, ymax = Net), alpha = 0.7) +
+  scale_fill_manual(values = c("plus" = "steelblue", "minus" = "firebrick"))</code></pre>
   </div>
 </section>
 
-<!-- ================= FUNNEL ANALYSIS ================= -->
 <section class="card">
-  <h2>Application-to-Disbursement Funnel</h2>
+  <h2>Determinants of Risk (Tables 3, 4 & 5)</h2>
 
-  <h3>Funnel Conversion Metrics</h3>
+  <h3>Table 3: Pairwise Connectedness Rankings</h3>
   <div class="code-box">
-    <span class="lang-tag">SQL</span>
-<pre><code class="language-sql">CREATE TABLE my_lib.mel_funnel_metrics AS
-SELECT
-    COUNT(DISTINCT application_id) AS total_applications,
-    COUNT(DISTINCT CASE WHEN decision = 'APPROVED' THEN application_id END) AS approved,
-    COUNT(DISTINCT loan_id) AS disbursed
-FROM my_lib.mel_funnel;</code></pre>
+    <span class="lang-tag">R</span>
+<pre><code class="language-r"># Identifying the strongest risk corridors
+pci_ranked <- melt(pci_mean, na.rm = TRUE) %>%
+  arrange(desc(value)) %>%
+  mutate(Rank = row_number())</code></pre>
   </div>
 
-  <h3>Drop-off Analysis</h3>
+  <h3>Table 4 & 5: HAC & Quantile Regressions</h3>
   <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">funnel = pd.read_csv("mel_funnel.csv")
+    <span class="lang-tag">R</span>
+<pre><code class="language-r"># Table 4: Newey-West Robust Regressions
+formatted_models <- lapply(models, function(m) {
+  createTexreg(coef = coef(m), se = sqrt(diag(NeweyWest(m))))
+})
 
-total_apps = funnel['application_id'].nunique()
-approved = funnel[funnel['decision']=='APPROVED']['application_id'].nunique()
-disbursed = funnel['loan_id'].nunique()
-
-print("Approval Rate:", approved / total_apps)
-print("Disbursement Rate:", disbursed / approved)</code></pre>
+# Table 5: Robustness via Quantile Regression
+qr_mod <- rq(TCI ~ CPU + GPR + TPU + VIX, tau = c(0.05, 0.5, 0.95), data = reg_data)</code></pre>
   </div>
 </section>
 
-<!-- ================= DISBURSEMENT STAGE ================= -->
 <section class="card">
-  <h2>Disbursement Stage Monitoring</h2>
-
-  <h3>Time-to-Disbursement (TAT)</h3>
+  <h2>Appendix: Fig A1 & A2</h2>
+  <p>Detailed breakdown of directional spillovers TO and FROM each country in the G20 network.</p>
   <div class="code-box">
-    <span class="lang-tag">SQL</span>
-<pre><code class="language-sql">CREATE TABLE my_lib.mel_disbursement_tat AS
-SELECT
-    application_id,
-    DATEDIFF(day, application_date, disbursement_date) AS tat_days
-FROM my_lib.mel_funnel
-WHERE disbursement_date IS NOT NULL;</code></pre>
-  </div>
+    <span class="lang-tag">R</span>
+<pre><code class="language-r"># Appendix A1: Total Directional To Others
+plot_appendix(res$TO, "Fig A1: Connectedness TO Others", "Figure_A1.png")
 
-  <h3>TAT Distribution</h3>
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">tat = pd.read_csv("mel_disbursement_tat.csv")
-tat['tat_days'].describe()</code></pre>
+# Appendix A2: Total Directional From Others
+plot_appendix(res$FROM, "Fig A2: Connectedness FROM Others", "Figure_A2.png")</code></pre>
   </div>
 </section>
 
-<!-- ================= EARLY REPAYMENT ================= -->
-<section class="card">
-  <h2>Early Repayment Behavior</h2>
-
-  <p>
-    Early repayment signals are the strongest predictors of future delinquency.
-    Special focus was placed on EMI-1 and EMI-2 behavior.
-  </p>
-
-  <h3>DPD String Parsing</h3>
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">def extract_early_dpd(dpd_string):
-    dpd_string = str(dpd_string)
-    return {
-        'dpd_emi1': int(dpd_string[0]) if len(dpd_string) > 0 else 0,
-        'dpd_emi2': int(dpd_string[1]) if len(dpd_string) > 1 else 0,
-        'dpd_emi3': int(dpd_string[2]) if len(dpd_string) > 2 else 0
-    }
-
-perf = pd.read_csv("mel_loan_performance.csv")
-early_dpd = perf['dpd_string'].apply(extract_early_dpd).apply(pd.Series)
-
-perf = pd.concat([perf[['loan_id','customer_id']], early_dpd], axis=1)</code></pre>
-  </div>
-
-  <h3>Early Risk Flags</h3>
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">perf['emi1_bounce_flag'] = (perf['dpd_emi1'] > 0).astype(int)
-perf['early_30plus_flag'] = (
-    (perf['dpd_emi1'] >= 3) |
-    (perf['dpd_emi2'] >= 3)
-).astype(int)
-
-perf[['emi1_bounce_flag','early_30plus_flag']].mean()</code></pre>
-  </div>
-</section>
-
-<!-- ================= EARLY WARNING ================= -->
-<section class="card">
-  <h2>Early Warning Indicators</h2>
-
-  <ul>
-    <li>EMI-1 bounce rate</li>
-    <li>EMI-2 delinquency build-up</li>
-    <li>High-risk score decile concentration</li>
-    <li>Delayed disbursement</li>
-  </ul>
-
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">tracking_df = tracking_df.merge(
-    perf[['loan_id','emi1_bounce_flag','early_30plus_flag']],
-    on='loan_id',
-    how='left'
-)
-
-tracking_df['early_risk_flag'] = (
-    (tracking_df['emi1_bounce_flag'] == 1) |
-    (tracking_df['early_30plus_flag'] == 1)
-).astype(int)
-
-tracking_df['early_risk_flag'].mean()</code></pre>
-  </div>
-</section>
-
-<!-- ================= SAVE OUTPUT ================= -->
-<section class="card">
-  <h2>Stage-wise Tracking Output</h2>
-
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">tracking_df.to_csv("mel_stagewise_tracking.csv", index=False)
-print("Stage-wise tracking dataset created.")</code></pre>
-  </div>
-</section>
-
-<!-- ===================================================== -->
-<!-- ================= PART 3 START ====================== -->
-<!-- ===================================================== -->
-
-<!-- ================= MODEL MONITORING ================= -->
-<section class="card">
-  <h2>Model & Policy Parameter Monitoring</h2>
-
-  <p>
-    Continuous monitoring of scorecard and policy parameters is critical to
-    ensure portfolio stability. Drift in input distributions or approval behavior
-    can lead to silent risk accumulation.
-  </p>
-</section>
-
-<!-- ================= SCORE DISTRIBUTION ================= -->
-<section class="card">
-  <h2>Score Distribution Monitoring</h2>
-
-  <h3>Monthly Score Distribution</h3>
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">apps = pd.read_csv("mel_applications.csv")
-apps['application_month'] = pd.to_datetime(
-    apps['application_date']
-).dt.to_period('M')
-
-score_dist = apps.groupby(
-    ['application_month','model_decile']
-).size().unstack(fill_value=0)
-
-score_dist.head()</code></pre>
-  </div>
-
-  <h3>Population Stability Index (PSI)</h3>
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">def calculate_psi(expected, actual, eps=1e-6):
-    expected = expected / expected.sum()
-    actual = actual / actual.sum()
-    psi = np.sum((actual - expected) * np.log((actual + eps) / (expected + eps)))
-    return psi
-
-base_month = score_dist.iloc[0]
-
-psi_values = score_dist.apply(
-    lambda x: calculate_psi(base_month, x),
-    axis=1
-)
-
-psi_values.head()</code></pre>
-  </div>
-
-  <p>
-    PSI thresholds used:
-    <ul>
-      <li><strong>&lt; 0.1:</strong> Stable</li>
-      <li><strong>0.1 – 0.25:</strong> Moderate drift</li>
-      <li><strong>&gt; 0.25:</strong> Significant drift</li>
-    </ul>
-  </p>
-</section>
-
-<!-- ================= APPROVAL DRIFT ================= -->
-<section class="card">
-  <h2>Approval Rate Drift</h2>
-
-  <div class="code-box">
-    <span class="lang-tag">SQL</span>
-<pre><code class="language-sql">CREATE TABLE my_lib.mel_monthly_approval AS
-SELECT
-    DATE_TRUNC('month', application_date) AS month,
-    COUNT(*) AS total_apps,
-    SUM(CASE WHEN decision='APPROVED' THEN 1 ELSE 0 END) AS approved_apps,
-    ROUND(
-        SUM(CASE WHEN decision='APPROVED' THEN 1 ELSE 0 END) * 1.0 /
-        COUNT(*),
-        3
-    ) AS approval_rate
-FROM my_lib.mel_applications
-GROUP BY 1
-ORDER BY 1;</code></pre>
-  </div>
-
-  <h3>Trend Monitoring</h3>
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">approval = pd.read_csv("mel_monthly_approval.csv")
-approval[['month','approval_rate']]</code></pre>
-  </div>
-</section>
-
-<!-- ================= PERFORMANCE DRIFT ================= -->
-<section class="card">
-  <h2>Early Delinquency Drift</h2>
-
-  <h3>EMI-1 Bounce Rate Trend</h3>
-  <div class="code-box">
-    <span class="lang-tag">Python</span>
-<pre><code class="language-python">tracking = pd.read_csv("mel_stagewise_tracking.csv")
-
-tracking['disbursement_month'] = pd.to_datetime(
-    tracking['disbursement_date']
-).dt.to_period('M')
-
-emi1_trend = tracking.groupby(
-    'disbursement_month'
-)['emi1_bounce_flag'].mean()
-
-emi1_trend</code></pre>
-  </div>
-
-  <p>
-    Any sustained upward trend in EMI-1 bounce rate triggers operational review.
-  </p>
-</section>
-
-<!-- ================= CONTROL THRESHOLDS ================= -->
-<section class="card">
-  <h2>Threshold & Alert Framework</h2>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Metric</th>
-        <th>Threshold</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>PSI</td>
-        <td>&gt; 0.25</td>
-        <td>Model review & recalibration</td>
-      </tr>
-      <tr>
-        <td>Approval Rate</td>
-        <td>±10% MoM</td>
-        <td>Policy validation</td>
-      </tr>
-      <tr>
-        <td>EMI-1 Bounce</td>
-        <td>&gt; 5%</td>
-        <td>Early intervention</td>
-      </tr>
-      <tr>
-        <td>High-Risk Decile Mix</td>
-        <td>&gt; 20%</td>
-        <td>Channel audit</td>
-      </tr>
-    </tbody>
-  </table>
-</section>
-
-<!-- ================= INTERVENTION ================= -->
-<section class="card">
-  <h2>Proactive Intervention Framework</h2>
-
-  <ul>
-    <li>Pre-EMI reminder calls for high-risk customers</li>
-    <li>Field follow-ups for delayed EMI-1 cases</li>
-    <li>Temporary tightening of score cut-offs</li>
-    <li>Branch & channel level performance review</li>
-  </ul>
-</section>
-
-<!-- ================= IMPACT ================= -->
 <section class="card">
   <h2>Business Impact</h2>
-
   <ul>
-    <li>Reduced early delinquency through timely intervention</li>
-    <li>Improved operational visibility across MEL lifecycle</li>
-    <li>Enhanced governance of credit models & policies</li>
-    <li>Improved portfolio stability and efficiency</li>
+    <li>Identified advanced economies as primary transmitters of systemic risk.</li>
+    <li>Quantified the surge in global connectedness during the COVID-19 pandemic (TCI > 70%).</li>
+    <li>Provided a robust framework for central banks to monitor early warning signals of contagion.</li>
+    <li>Validated the influence of global uncertainty indices on sovereign credit risk transmission.</li>
   </ul>
-
-  <p>
-    The tracking framework enabled proactive decision-making,
-    improving portfolio performance while reducing manual oversight.
-  </p>
-</section>
-
-<!-- ================= CONCLUSION ================= -->
-<section class="card">
-  <h2>Conclusion</h2>
-
-  <p>
-    The MEL End-to-End Tracking framework transformed reactive risk management
-    into a proactive, data-driven process. By monitoring customer behavior,
-    model performance, and operational KPIs together, the business gained
-    early visibility into risk and inefficiencies.
-  </p>
 </section>
 
 <a href="https://your-portfolio-link.com" class="back-btn">Back to Portfolio</a>
@@ -579,8 +164,7 @@ emi1_trend</code></pre>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-r.min.js"></script>
 
 </body>
 </html>
