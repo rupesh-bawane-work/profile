@@ -371,7 +371,7 @@ ggsave("Pareto_Curve.png", plot = p,
     
 <section class="card">
   <h2>Customer Segmentation</h2>
-  <p>Detailed breakdown of directional spillovers TO and FROM each country in the G20 network.</p>
+  <p>Customer segmentation on the basis of recency days and revenue.</p>
   <div class="code-box">
     <span class="lang-tag">R</span>
 <pre><code class="language-r"># customer value counts
@@ -443,6 +443,10 @@ p = ggplot(customer_df, aes(x = recency_days, y = total_revenue, color = cluster
 ggsave("k_means.png", plot = p,
        width = 10, height = 6.7,  # 16:9 aspect ratio
        dpi = 300)</code></pre>
+  </div>
+  
+  <div>
+    <img src="k_means.png" alt="Pareto Curve" style="width:100%; margin-top:20px; border-radius:8px;" alt="Power BI Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;"/>
   </div>
   
   <h3>Value and Risk Exposure</h3>
@@ -591,6 +595,10 @@ pred_class <- ifelse(pred_prob > 0.40, 1, 0)
 confusionMatrix(factor(pred_class), factor(test_target))
 </code></pre>
   </div>
+
+<div>
+    <img src="roc_curve.png" alt="Pareto Curve" style="width:100%; margin-top:20px; border-radius:8px;" alt="Power BI Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;"/>
+  </div>
   
   <h3>Profit Curve</h3>
     <div class="code-box">
@@ -639,6 +647,10 @@ ggsave("Profit_curve.png", plot = p,
        width = 10, height = 6.7,  # 16:9 aspect ratio
        dpi = 300)
 </code></pre>
+  </div>
+  
+  <div>
+    <img src="Profit_curve.png" alt="Pareto Curve" style="width:100%; margin-top:20px; border-radius:8px;" alt="Power BI Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;"/>
   </div>
 </section>
 
@@ -803,6 +815,10 @@ ggsave("models_comaparison.png", plot = p,
        width = 10, height = 6.7,  # 16:9 aspect ratio
        dpi = 300)</code></pre>
   </div>
+
+  <div>
+    <img src="models_comparison.png" alt="Pareto Curve" style="width:100%; margin-top:20px; border-radius:8px;" alt="Power BI Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;"/>
+  </div>
 </section>
 
 
@@ -942,6 +958,10 @@ p_priority = ggplot(customer_df, aes(x = clv, y = churn_prob, color = priority_g
 ggsave("priority_matrix.png", p_priority,
        width = 10, height = 6.7, dpi = 300)</code></pre>
   </div>
+
+  <div>
+    <img src="priority_matrix.png" alt="Pareto Curve" style="width:100%; margin-top:20px; border-radius:8px;" alt="Power BI Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;"/>
+  </div>
   
   <h3>Value at Risk by Segment</h3>
   <div class="code-box">
@@ -984,6 +1004,10 @@ ggsave("rar_segment.png", p_rar,
        width = 10, height = 6.7, dpi = 300)
 
 </code></pre>
+  </div>
+
+  <div>
+    <img src="rar_segment.png" alt="Pareto Curve" style="width:100%; margin-top:20px; border-radius:8px;" alt="Power BI Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;"/>
   </div>
   
 <h3>ROI Based Targetting</h3>
@@ -1042,6 +1066,10 @@ campaign_summary <- customer_df %>%
 
 campaign_summary
 </code></pre>
+  </div>
+
+<div>
+    <img src="retention_decision.png" alt="Pareto Curve" style="width:100%; margin-top:20px; border-radius:8px;" alt="Power BI Dashboard Screenshot" style="width:100%; margin-top:20px; border-radius:8px;"/>
   </div>
 </section>
 
